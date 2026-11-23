@@ -7,7 +7,7 @@ import abc
 import json
 import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
@@ -23,14 +23,12 @@ from audit_llm.Bits_Generation.parsing_bits_tools import (
 from audit_llm.Bits_Generation.Token_Pairs_Sets import (
     TOKEN_PAIRS_SETS_DICT,
 )
+from audit_llm.LLM_Classes.chat_rendering import render_chat_prompt
 from audit_llm.LLM_Classes.fallback_templates import (
     format_with_fallback,
 )
-from audit_llm.LLM_Classes.model_tokenizer_map import (
-    model_tokenizer_map,
-)
 from audit_llm.LLM_Classes.run_config import RunConfigDict
-from audit_llm.file_io import load_json, open_pickle_file, save_pickle_file
+from audit_llm.file_io import load_json
 from audit_llm.path_utils import make_path_and_create_folder
 
 
@@ -57,16 +55,13 @@ class LLM_for_audit(abc.ABC):
             model_name: HuggingFace model identifier.
             run_path: Production directory for this run.
             run_config: Unified run configuration dictionary.
-            model_path: Optional local or remote model path override.
+            model_path: Optional local path or Hugging Face hub id of the weights (default: ``model_name``).
         """
         self.max_tokens: str = "Default"
 
         self.dataframe: pd.DataFrame = pd.DataFrame()
         self.model_name: str = model_name
         self.model: str = model_path if model_path is not None else model_name
-
-        self.Dataset_path: str = ""
-        self.proper_answers: list[str] = []
 
         # Data saving
         if run_path:
@@ -129,7 +124,7 @@ class LLM_for_audit(abc.ABC):
             sampling_key_done = any(
                 self.sampling_key_str in gen_file
                 and "generations_terminated" in gen_file
-                and (gen_file.endswith(".parquet") or gen_file.endswith(".pickle"))
+                and gen_file.endswith(".parquet")
                 for gen_file in generations_done
             )
 
@@ -155,13 +150,6 @@ class LLM_for_audit(abc.ABC):
     # Prompt formatting
     # ------------------------------------------------------------------
 
-    def _does_template_have_system(self) -> bool:
-        """Check whether the tokenizer's chat template supports a system role."""
-        chat_template = getattr(self.tokenizer, "chat_template", None)
-        if chat_template is None:
-            return False
-        return "system" in chat_template
-
     def _format_prompts_for_model(
         self, sampling_key: dict[str, float], verbose: bool = False
     ) -> list["LLM_Generation"]:
@@ -170,27 +158,14 @@ class LLM_for_audit(abc.ABC):
         Returns:
             List of LLM_Generation instances with formatted prompts.
         """
-        if self.model_type == "openrouter":
-            raise NotImplementedError(
-                f"Model {self.model_name} is using openrouter. " "Openrouter formatting not implemented yet."
-            )
-
         system_prompt_list: list[str] = load_json("system_prompts")  # type: ignore[assignment]
         formatted: list[LLM_Generation] = []
 
         has_apply = hasattr(self.tokenizer, "apply_chat_template")
-        has_system_template = self._does_template_have_system()
 
         if not has_apply:
             logger.warning(
                 "Tokenizer %s has no apply_chat_template. Using fallback formatting. Model: %s",
-                self.tokenizer.__class__.__name__,
-                self.model_name,
-            )
-        elif not has_system_template:
-            logger.warning(
-                "Tokenizer %s chat template does not support 'system' role. "
-                "Will try merging system into user where needed. Model: %s",
                 self.tokenizer.__class__.__name__,
                 self.model_name,
             )
@@ -211,16 +186,12 @@ class LLM_for_audit(abc.ABC):
                 raw_prompt = prompt_idx_to_actual_prompt(raw_prompt_idx, token_pair)
 
                 if has_apply:
-                    text = self._apply_chat_template(
-                        raw_prompt,
-                        system_prompt,
-                        has_system_template,
-                        verbose,
-                    )
+                    text = self._apply_chat_template(raw_prompt, system_prompt, verbose)
                 else:
                     text = format_with_fallback(self.model_name, raw_prompt, system_prompt, verbose)
 
-                # Ensure BOS token is present if tokenizer defines one
+                # Ensure BOS token is present if tokenizer defines one. The text is later tokenized
+                # without adding special tokens (vLLM backend), so this is the prompt's only BOS.
                 if self.tokenizer.bos_token is not None and not text.startswith(self.tokenizer.bos_token):
                     text = self.tokenizer.bos_token + text
 
@@ -238,12 +209,32 @@ class LLM_for_audit(abc.ABC):
         self,
         raw_prompt: str,
         system_prompt: Optional[str],
-        has_system_template: bool,
         verbose: bool,
     ) -> str:
-        """Try apply_chat_template with fallback chain."""
+        """Render one request with the model's chat template.
+
+        A system prompt is always delivered: through the native ``system`` role when the template
+        renders it, else merged into the user turn. Models listed in
+        ``chat_templates/template_overrides.json`` are rendered with their pinned template
+        (see :mod:`audit_llm.LLM_Classes.chat_rendering`).
+        """
+        return render_chat_prompt(
+            self.tokenizer,
+            self.model_name,
+            raw_prompt,
+            system_prompt,
+            lambda text, system: self._apply_default_chat_template(text, system, verbose),
+        )
+
+    def _apply_default_chat_template(
+        self,
+        raw_prompt: str,
+        system_prompt: Optional[str],
+        verbose: bool,
+    ) -> str:
+        """Try the checkpoint's apply_chat_template, with fallback chain."""
         messages: list[dict[str, str]] = []
-        if has_system_template and system_prompt is not None:
+        if system_prompt is not None:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": raw_prompt})
 
@@ -295,18 +286,12 @@ class LLM_for_audit(abc.ABC):
 
         gen_dir = Path(self.generations_path)
         parquet_checkpoint = gen_dir / f"{self.sampling_key_str}_generations.parquet"
-        pickle_checkpoint = gen_dir / f"{self.sampling_key_str}_generations.pickle"
 
         if dataset_terminated:
-            # Remove checkpoint files (both formats)
-            for p in (parquet_checkpoint, pickle_checkpoint):
-                if p.exists():
-                    p.unlink()
+            # The final file replaces the checkpoint.
+            if parquet_checkpoint.exists():
+                parquet_checkpoint.unlink()
             save_path = gen_dir / f"{self.sampling_key_str}_generations_terminated.parquet"
-            # Also remove old pickle terminated file if it exists
-            old_pickle_terminated = gen_dir / f"{self.sampling_key_str}_generations_terminated.pickle"
-            if old_pickle_terminated.exists():
-                old_pickle_terminated.unlink()
         else:
             save_path = parquet_checkpoint
 
@@ -320,13 +305,9 @@ class LLM_for_audit(abc.ABC):
             f.write(str(self.execution_time))
 
     def _load_generation(self, sampling_key: dict[str, float]) -> None:
-        """Load existing generations from checkpoint or format new prompts.
-
-        Tries Parquet first, falls back to pickle for backward compatibility.
-        """
+        """Load existing generations from the Parquet checkpoint, or format new prompts."""
         gen_dir = Path(self.generations_path)
         parquet_path = gen_dir / f"{self.sampling_key_str}_generations.parquet"
-        pickle_path = gen_dir / f"{self.sampling_key_str}_generations.pickle"
 
         if parquet_path.exists():
             logger.info("Loading existing generations from %s", parquet_path)
@@ -334,9 +315,6 @@ class LLM_for_audit(abc.ABC):
             self.generations: list[LLM_Generation] = [
                 LLM_Generation.from_row_dict(row) for row in df.to_dict(orient="records")
             ]
-        elif pickle_path.exists():
-            logger.info("Loading existing generations from %s (legacy)", pickle_path)
-            self.generations = open_pickle_file(pickle_path)
         else:
             logger.info("No existing generations found for %s. Formatting prompts.", self.sampling_key_str)
             self.generations = self._format_prompts_for_model(sampling_key)
@@ -351,14 +329,17 @@ class LLM_for_audit(abc.ABC):
             return
         from transformers import AutoTokenizer  # pylint: disable=import-outside-toplevel
 
-        self.tokenizer = model_tokenizer_map.get(self.model_name, AutoTokenizer).from_pretrained(
-            self.model,
-            padding_side="left",
-            device_map="auto",
-            trust_remote_code=True,
-            local_files_only=True,
-            use_fast=False,
-        )
+        tokenizer_kwargs: dict[str, Any] = {
+            "padding_side": "left",
+            "device_map": "auto",
+            "trust_remote_code": True,
+            "local_files_only": True,
+        }
+        try:
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model, use_fast=False, **tokenizer_kwargs)
+        except ValueError:
+            # Models that ship only a fast tokenizer class (e.g. Cohere) raise on use_fast=False.
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model, **tokenizer_kwargs)
         if self.tokenizer.eos_token is None:
             raise ValueError("NO EOS TOKEN FOR:", self.model)
         if self.tokenizer.pad_token is None:
@@ -381,8 +362,7 @@ class LLM_for_audit(abc.ABC):
             LLM_gen.output_logprobs = self.extract_logprobs(completion, LLM_gen.token_pair)
         else:
             LLM_gen.output_logprobs = None
-
-        LLM_gen.formatted_prompt = ""  # free memory
+        # formatted_prompt is kept: the saved generations record the exact prompt sent.
 
     def extract_logprobs(self, completion: Any, token_pair_str: str) -> list[dict[str, Any]]:
         """Extract per-step log probabilities for a target token pair.
@@ -436,11 +416,7 @@ class LLM_for_audit(abc.ABC):
 
 @dataclass
 class LLM_Generation:
-    """Single prompt/generation unit for LLM auditing.
-
-    Note: NO ``__slots__`` so that old pickle files (created before the
-    dataclass conversion) can still be unpickled safely.
-    """
+    """Single prompt/generation unit for LLM auditing."""
 
     # Constructor arguments (always provided at creation time)
     formatted_prompt: str
@@ -448,7 +424,6 @@ class LLM_Generation:
     dataset_idx: int
 
     # Fields populated after generation
-    output: Optional[Any] = field(default=None, repr=False)
     output_text: str = ""
     scrapped_output: str = ""
     output_token_ids: Optional[list[int]] = None

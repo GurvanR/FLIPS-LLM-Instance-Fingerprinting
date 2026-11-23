@@ -4,11 +4,11 @@ A **scenario** is a declarative YAML file (`config/scenarios/<name>.yaml`) that
 selects which model × variation **instances** the analysis layer materialises.
 It is loaded and validated by
 [`audit_llm.scenarios.load_scenario`](../../src/audit_llm/scenarios/loader.py)
-against the model-universe registry [`config/models.yaml`](../models.yaml).
+against the model registry [`config/models.yaml`](../models.yaml).
 
-> **The scenario layer governs model × variation *selection* only.** It reads
-> and validates; it does **not** run inference, compute features, or touch any
-> dataset. See the **CSV invariant** below.
+> **The scenario layer governs model × variation *selection*.** It reads and
+> validates scenario files; inference and features are computed elsewhere. See
+> **Request files** below.
 
 ## The four axes
 
@@ -24,18 +24,16 @@ Every variation is a point in a four-axis space:
 `temperature` and `system_prompt_idx` change *how a model is sampled*.
 `quantization` and `abliteration` produce **a transformed copy of a base model**:
 
-- **quantization** keeps the same weights and flips a vLLM engine kwarg — so it
-  can be *crossed* as an axis inside the quantized grid;
-- **abliteration** points at *different weights* (a separate repo), so it is a
-  **model-selection** transform chosen via the `abliterated_models` list, not a
-  knob you cross a base model over. The `abliteration` axis on a variation group
-  therefore stays empty in the shipped scenarios.
+- **quantization** keeps the same weights and sets a vLLM engine kwarg; the
+  quantized grid crosses it as an axis;
+- **abliteration** points at *different weights* (a separate repo), listed in
+  `abliterated_models`; the shipped scenarios leave the `abliteration` axis of
+  their variation groups empty.
 
 ## Cartesian within a group, union across groups
 
 A *variation grid* is a **list of groups** (dicts). Each group lists allowed
-values per axis. Semantics, identical to the legacy `model_variations` /
-`quantized_model_variations` list-of-dicts:
+values per axis. Semantics:
 
 - **cartesian within a group** — one group expands to the cartesian product of
   its populated axes;
@@ -89,21 +87,14 @@ registry path) when:
 
 ### Abliteration is pinned — no crossing
 
-The released data contains abliterated runs **only** at `temperature=1.0,
+The paper's corpus contains abliterated runs **only** at `temperature=1.0,
 system_prompt_idx=-1`. The loader therefore **rejects** any
 `abliteration_variations` group whose `temperature ≠ 1.0`, whose
 `system_prompt_idx ≠ -1`, or that sets a `quantization` / `abliteration` axis.
 Abliterated instances are never crossed beyond that pinned cell.
 
-## CSV invariant (critical)
+## Request files
 
-**The scenario layer never emits, regenerates, or owns any prompt-request CSV.**
-The `datasets/Bits_Datasets/*.csv` files are consumed **UNCHANGED**. Their
-SHA-256 — computed by
-[`compute_file_hash`](../../src/audit_llm/file_io.py) and surfaced as
-`source_csv_hash` in
-[`data_loader.py`](../../src/audit_llm/data_loader.py) — gates the
-feature cache in `data_loader.py`: any byte change to a source CSV silently
-invalidates the released cache. Consequently **no CSV-writing helper exists
-anywhere in the `audit_llm.scenarios` package** — scenarios select model ×
-variation instances and nothing else.
+The `datasets/Bits_Datasets/*.csv` files define the generation requests: their `Index` values and
+(temperature, system prompt) cells are what the stored answers refer to. They are inputs of the generation and
+of the analysis, and a scenario selects model × variation instances among them.

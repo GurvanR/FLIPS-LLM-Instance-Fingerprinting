@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: 2026 Pôle d'Expertise de la Régulation Numérique <contact@peren.gouv.fr>
+#
+# SPDX-License-Identifier: MIT
+#
+# Smoke test of the open-set pipeline on the in-repo fixture (22 instances, 2 token pairs, 200 sequences each).
+# Same method as open_set.yaml, scaled to the fixture: 3 Unseen instances, fewer boosting rounds. This is the
+# protocol of tests/test_open_set_reference.py.
+#   python -m audit_llm.pipeline run --config XP_configs/smoke_open_set.yaml --answers tests/fixtures/answers.parquet --out /tmp/flips_open
+experiment_fun: open_set
+token_pairs: [ali-yg, df-bits]
+batch_sizes: [1, 2, 4, 8]
+protocol:
+  test_per_class: 40
+  inner_val: 10
+  n_train: 100
+classifier:
+  global_rounds: 100
+  n_jobs: 4
+  round_selection_max: 100
+open_set:
+  cells: [[0, 0], [1, 1]]
+  n_unseen: 3
+  min_rows_per_instance: 60

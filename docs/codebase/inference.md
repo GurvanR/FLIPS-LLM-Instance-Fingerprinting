@@ -1,219 +1,185 @@
-# Inference Pipeline
+# Generation pipeline
 
----
+The generation pipeline turns a request dataset ([`dataset.md`](dataset.md)) and a model into answer files:
+it renders every request with the model's chat template, sends token-id prompts to vLLM, re-queries answers
+that are too short, writes one Parquet file per sampling key, and parses the answers into the tables read by
+the analysis. Generation runs on vLLM. GPU walkthrough:
+[`../reproduction/generation.md`](../reproduction/generation.md).
 
-## Overview
+## Files
 
-The inference pipeline produces raw LLM generations from a prompt CSV dataset. It is CLI-driven
-(`scripts/Run_Inferences.py`), builds a validated `run_config.json` that describes the run (models,
-paths, sampling defaults, environment), dispatches one backend instance per model, iterates over
-unique `(temperature, frequency_penalty)` sampling keys extracted from the dataset, and writes one
-Parquet checkpoint per model per sampling key under `Productions/.../<model>/`.
+| Path | Role |
+|------|------|
+| `scripts/Run_Inferences.py` | command line: one model (optionally quantized) on one request dataset |
+| `scripts/Inference_configs.yaml` | per-dataset settings (`min_seq_length`, `dyn_checking_batch_size`, `TOP_K`, `max_model_len`, `MAX_TOKENS`, `TOKEN_PAIRS_SET`) |
+| `src/audit_llm/LLM_Classes/run_config.py` | builds and updates `run_config.json` |
+| `src/audit_llm/LLM_Classes/inference_runner.py` | `multi_model_infer`: loop over the models of a run |
+| `src/audit_llm/LLM_Classes/General_LLM_Class.py` | request rendering, checkpoints, tokenizer, `LLM_Generation` (one request) |
+| `src/audit_llm/LLM_Classes/vLLM_Classes.py` | vLLM backend: engine arguments, `QUANTIZATION_VLLM_PARAMS`, generation loop |
+| `src/audit_llm/LLM_Classes/chat_rendering.py` | system-prompt delivery, pinned templates, token ids, stop tokens |
+| `src/audit_llm/LLM_Classes/chat_templates/` | `template_overrides.json`, four pinned `.jinja` templates, `stop_token_ids.json` |
+| `src/audit_llm/LLM_Classes/fallback_templates.py` | Phi-3 prompt format and plain concatenation, for tokenizers without a usable chat template |
+| `src/audit_llm/LLM_Classes/generation_parser.py`, `scripts/parsing_generations.py` | parse generations, merge sub-runs |
+| `src/audit_llm/model_analysis.py`, `src/audit_llm/Analysis_Classes.py` | per-model answer extraction and the answers tables |
+| `src/audit_llm/Bits_Generation/parsing_bits_tools.py` | bit-string extraction (`answer_to_bit_string`) and validity (`validate_seq`) |
+| `scripts/merge_runs.py` | merge a parsed run into another |
 
-vLLM is the primary (fully-implemented) backend. HuggingFace and OpenRouter are scaffolded in the
-config and dispatch layers but are **not** the active execution path — see
-[Backend coverage](#backend-coverage) below.
+## Command line
 
----
+`python scripts/Run_Inferences.py --dataset FLiPS_ICML --model <hf id> [--quantization fp8|bitsandbytes_int4] --sub_run <name> --gpu N --parse_gen`.
+Switches take no value.
 
-## File structure
+| Flag | Default | Effect |
+|------|---------|--------|
+| `--dataset` | `FLiPS_ICML` | key of `scripts/Inference_configs.yaml`; reads `datasets/Bits_Datasets/<dataset>.csv` |
+| `--model` | required | Hugging Face id (see `config/models.yaml`); an empty value stops the run |
+| `--quantization` | `no_quantized` | `no_quantized`, `fp8` or `bitsandbytes_int4`; another value stops the run |
+| `--sub_run` | `default` | the run folder is `<dataset>_run/<sub_run>` |
+| `--gpu` | `1` | tensor-parallel size given to vLLM |
+| `--device` | `0,...,N-1` for `--gpu N` | value of `CUDA_VISIBLE_DEVICES`, set by the script itself (comma-separated GPU ids; `0,1,2,3` for `--gpu 4`) |
+| `--parse_gen` | off | parse the generations when generation ends |
+| `--erase_previous_run` | off | delete the run folder first; without it a run resumes |
+| `--test` | off | write under `Test_Runs` (the default is `Normal_Runs`) |
+| `--hours_delay` | `0` | wait this many hours before generating |
 
-| File | Description |
-|------|-------------|
-| `scripts/Run_Inferences.py` | CLI entry point: parses args, loads `Inference_configs.yaml`, expands model × quantization, builds vLLM/HF/OpenRouter configs, calls `make_run_config()` then `run_inferences()` → `multi_model_infer()` |
-| `scripts/Inference_configs.yaml` | Per-dataset inference defaults (`TOKEN_PAIRS_SET`, `MAX_TOKENS`, `TOP_K`, `max_model_len`, `min_seq_length`, `dyn_checking_batch_size`, optional `TEMPERATURES`, `logprobs`) |
-| `config/models.yaml` | Model universe registry: HF ids, quantization levels, abliterated repos |
-| `src/audit_llm/LLM_Classes/inference_config_schema.py` | `InferenceConfig` Pydantic validator + legacy key aliases |
-| `src/audit_llm/LLM_Classes/run_config.py` | `RunConfigDict` + `make_run_config()` / `update_run_config()` |
-| `src/audit_llm/LLM_Classes/inference_runner.py` | `run_inferences()` and `multi_model_infer()` |
-| `src/audit_llm/LLM_Classes/General_LLM_Class.py` | Abstract base `LLM_for_audit` + `LLM_Generation` dataclass |
-| `src/audit_llm/LLM_Classes/vLLM_Classes.py` | `vLLM` backend: instantiation, `QUANTIZATION_VLLM_PARAMS`, `_generate()` with dynamic batching + retry |
-| `src/audit_llm/LLM_Classes/fallback_templates.py` | Chat-template fallbacks when `tokenizer.apply_chat_template` fails |
-| `src/audit_llm/LLM_Classes/generation_parser.py` | `parsing_generations()`: post-process Parquet checkpoints into `Answers.csv` |
-| `src/audit_llm/Bits_Generation/parsing_bits_tools.py` | `validate_seq()`: determines if a generation is valid |
+Engine settings set in the script: `dtype` bfloat16, `gpu_memory_utilization` 0.9, `trust_remote_code`,
+`tensor_parallel_size` = `--gpu`; `max_model_len`, `top_k`, `max_tokens` and `logprobs` (unset) come from
+`scripts/Inference_configs.yaml` (2048, 50, 500). Temperature and frequency penalty come from the request
+rows. The script reads the YAML as plain dictionaries with the upper-case keys; `InferenceConfig`
+(`inference_config_schema.py`) validates the same entries.
 
----
+When `AUDIT_LLM_MODEL_CACHE` is set, the weights of `<org>/<model>` are loaded from
+`$AUDIT_LLM_MODEL_CACHE/<org>/<model>`; when it is unset, the model path is the Hugging Face hub id and the weights
+come from the standard Hugging Face cache (`HF_HOME`). The tokenizer is opened with `local_files_only=True`, so
+the repository must be in the local folder or in the Hugging Face cache before the run
+([`../reproduction/generation.md`](../reproduction/generation.md)).
 
-## End-to-end flow
+## Request rendering
 
-```
-Run_Inferences.py (CLI)
-  |
-  |-- 1. argparsing(args)
-  |-- 2. Load Inference_configs.yaml[dataset]        -> Inf_config
-  |-- 3. Model name resolution:
-  |        --model          -> [parsed_args['model']]
-  |        (else)           -> default model set
-  |-- 4. Build vllm_model_config / hf_model_config / open_router_config
-  |-- 5. Snapshot Inference_configs.yaml into run_path
-  |-- 6. make_run_config(...)                        -> run_config.json (+ run_metadata.csv)
-  |
-  +-- 7. run_inferences(run_name, Productions_path, run)
-          |
-          +-- multi_model_infer(run_name, Productions_path)
-                |
-                |-- Load run_config.json (or pickle fallback)
-                |
-                +-- For each model in run_config['vllm_models'] where is_done==False:
-                      |
-                      |-- save_tokenizer_vocab_from_model(base_name, model_path)
-                      |-- audited_llm = vLLM(model_name, run_config, run_path, model_path)
-                      |
-                      |-- audited_llm.multi_dataset_infer(dataset_path)
-                      |     |
-                      |     |-- polars.read_csv(Dataset_path)
-                      |     |-- unique (temperature, frequency_penalty) -> sampling_keys
-                      |     |
-                      |     +-- For each sampling_key:
-                      |           |-- _format_prompts_for_model()       -> List[LLM_Generation]
-                      |           |-- _generate(sampling_key)            -> fill outputs, retry, validate
-                      |           +-- _save_generations(terminated=True) -> parquet
-                      |
-                      |-- run_config['vllm_models'][model_name] = True
-                      |-- update_run_config(...)
-                      +-- destroy_model_parallel(); del audited_llm; gc; torch.cuda.empty_cache()
-  |
-  +-- 8. (optional) parsing_generations(run_name, Productions_path) -> Answers.csv
-```
+For each request row and each token pair (31 pairs) `General_LLM_Class._format_prompts_for_model` builds one
+`LLM_Generation`:
 
----
+1. The user text comes from `prompt_idx_to_actual_prompt` ([`dataset.md`](dataset.md)); the system text
+   comes from `datasets/system_prompts.json`, or is absent for index `-1`.
+2. `chat_rendering.render_chat_prompt` renders the chat:
+   - **System prompt delivery.** The model's own `system` role is tried first. If the system text is
+     missing from the rendered prompt (the template has no system turn, or refuses the role), it is merged
+     into the user turn as `<system>\n\n<user>`. Delivery is asserted: an undelivered system prompt raises.
+   - **Pinned templates.** `template_overrides.json` maps four models (`meta-llama/Llama-3.1-8B-Instruct`,
+     `meta-llama/Meta-Llama-3.1-70B-Instruct`, `microsoft/Phi-3-mini-4k-instruct`,
+     `microsoft/Phi-3-mini-128k-instruct`) to a Hugging Face template file
+     `<org>__<model>@<hub revision>.jinja`; that template is used for every prompt of the model, whatever
+     the checkpoint ships. Other models use the template of their checkpoint, then a fallback chain:
+     system merged into the user turn, a model-specific format of `fallback_templates.py`, plain
+     concatenation.
+3. The BOS token is prepended when the tokenizer defines one and the text does not start with it.
+4. In `vLLM._generate` the text is encoded with `add_special_tokens=False` and sent as
+   `{"prompt_token_ids": [...]}`, so every prompt holds one BOS (two raise an assertion).
+5. **Stop tokens.** `stop_token_ids.json` lists, for each of the 30 models of the benchmark (25 base LLMs and
+   5 abliterated repositories), the end-of-sequence and end-of-turn ids; they are passed as
+   `stop_token_ids`. For a model absent from the file the backend defaults apply. Quantized variants use the
+   entries of their base model (the `@@<quantization>` suffix is dropped for every lookup).
 
-## CLI arguments
-
-| Arg | Default | Purpose |
-|-----|---------|---------|
-| `--dataset` | `Toy_example` | Key into `Inference_configs.yaml`; derives `Dataset_relative_path = datasets/Bits_Datasets/<dataset>.csv` |
-| `--model` | `""` | Full HF repo id. Empty ⇒ default model set |
-| `--sub_run` | `default` | Per-model-set suffix appended to `run_name` as `<dataset>_run/<sub_run>` |
-| `--gpu` | `1` | Tensor-parallel size for vLLM |
-| `--bs` | `20` | HF-only batch size (HF backend is scaffolded only) |
-| `--openrouter` | `False` | Route all models to OpenRouter |
-| `--erase_previous_run` | `False` | Remove the run folder before starting instead of resuming |
-| `--parse_gen` | `False` | After inference, run `parsing_generations()` to produce `Answers.csv` |
-| `--hours_delay` | `0.0` | Sleep inside `multi_model_infer` before work starts |
-| `--device` | `0` | `CUDA_VISIBLE_DEVICES` |
-| `--test` | `False` | Routes outputs under `Productions/Graph_Productions/Test_Runs/` |
-| `--seed` | `42` | Reserved; passed through for reproducibility |
-
-For HPC/SLURM usage, see [`docs/reproduction.md`](../reproduction.md).
-
----
-
-## `Inference_configs.yaml` fields
-
-Validated by `InferenceConfig`. Legacy aliases map to canonical names.
-
-| Key (YAML) | Canonical | Purpose |
-|------------|-----------|---------|
-| `min_seq_length` | `min_seq_length` | Minimum scrapped bit-string length for a generation to be valid |
-| `dyn_checking_batch_size` | `dyn_checking_batch_size` | Dynamic batch size fed to `vllm.LLM.generate()` per step |
-| `TOP_K` | `top_k` | Sampling top-k |
-| `max_model_len` | `max_model_len` | Context window passed to vLLM |
-| `MAX_TOKENS` | `max_tokens` | Max tokens generated per request |
-| `TOKEN_PAIRS_SET` | `token_pairs_set` | Key into `TOKEN_PAIRS_SETS_DICT` (see [dataset.md](dataset.md)) |
-| `TEMPERATURES` | `temperatures` | Optional temperature sweep (deprecated: temperatures come from the dataset) |
-| `logprobs` | `logprobs` | Top-k logprobs to capture (optional) |
-| `nb_of_samples` | `nb_of_samples` | Deprecated/metadata only |
-
----
-
-## `run_config.json` schema
-
-| Group | Fields |
-|-------|--------|
-| Identity | `run_name`, `scrapping_rule`, `created_at`, `Initial_checkpoint` |
-| Sampling / dataset | `min_seq_length`, `dyn_checking_batch_size`, `TOKEN_PAIRS_SET`, `MAX_TOKENS`, `Dataset_relative_path`, `hours_delay` |
-| Backend configs | `vllm_model_config`, `hf_model_config`, `openrouter_model_config` |
-| Model maps | `vllm_models`, `hf_models`, `openrouter_models` (done-flags); `*_model_path`; `quantization_map` |
-| Progression | `vllm_models_progression`, `hf_models_progression`, `openrouter_models_progression` |
-| Environment | `environment`: `python_version`, `vllm_version`, `torch_version`, `cuda_version`, `gpu_type` |
-
-`run_config.json` is the authoritative record of a run. `update_run_config()` flips
-`Initial_checkpoint=False`, updates done-flags, and refreshes `Productions/run_metadata.csv`.
-
----
-
-## Prompt formatting
-
-`LLM_for_audit._format_prompts_for_model()` converts each dataset row into one or more
-`LLM_Generation` objects:
-
-1. Load `system_prompts*.json` once.
-2. For each row: resolve the raw prompt via `prompt_idx_to_actual_prompt(prompt_idx, token_pair)`.
-3. Apply tokenizer chat template with fallback chain:
-   1. `tokenizer.apply_chat_template([{system}, {user}], add_generation_prompt=True)`
-   2. Merge system into user turn and retry.
-   3. `format_with_fallback()` in `fallback_templates.py` (manual template per model family).
-   4. Plain concatenation as last resort.
-4. Instantiate one `LLM_Generation` per `(row, token_pair)`.
-
----
+The tokenizer is loaded with `use_fast=False`; when that raises a `ValueError` (models that only ship a
+fast tokenizer, such as the Cohere ones) it is loaded with the default setting. Its pad token is set to the
+EOS token when missing.
 
 ## Generation loop
 
-`vLLM._generate(sampling_key)` consumes the pending `LLM_Generation` buffer in dynamic batches:
+`vLLM._generate(sampling_key)` serves the requests of one sampling key:
 
-1. Fill a working batch up to `dyn_checking_batch_size` from the pending queue.
-2. Call `vllm.llm.generate(prompts, SamplingParams(**sampling_config, **sampling_key))`.
-3. `validate_seq()` checks: `len(answer_to_bit_string(text, token_pair)) >= min_seq_length`.
-4. Per-generation retry counter increments on every attempt; max is `max_gen_counter = 5`. When
-   exceeded, the generation is marked `fail=True` and the last output is kept.
-5. `_save_generations()` checkpoints every 250 completions to `{temp}-{fp}_generations.parquet`,
-   and once more at the end to `{temp}-{fp}_generations_terminated.parquet`.
+1. Up to `dyn_checking_batch_size` (500) pending requests form a batch given to `llm.generate`.
+2. An answer is valid when its bit string (below) has at least `min_seq_length` (100) symbols
+   (`validate_seq`).
+3. An invalid request goes back to the pending buffer and is queried again. Each request is attempted at
+   most 5 times (`max_gen_counter`); after the fifth invalid answer it is flagged `fail` and its last
+   answer is kept.
+4. Every 250 completions the state is written to `<temperature>-<frequency_penalty>_generations.parquet`; at
+   the end it is written to `..._generations_terminated.parquet` and the checkpoint is removed.
 
----
+A relaunch skips the sampling keys that have a terminated file, reloads a checkpoint, and skips the models
+flagged done in `run_config.json`.
 
-## Output structure
+## Output layout
 
 ```
-Productions/Graph_Productions/<Production_folder>/<dataset>_run/<sub_run>/
-  +-- run_config.json
-  +-- Inference_configs.yaml              (snapshot at run start)
-  +-- <model_name>/
-  |     +-- {temp}-{fp}_generations.parquet           (in-progress)
-  |     +-- {temp}-{fp}_generations_terminated.parquet (final)
-  |     +-- {temp}-{fp}_execution_time.txt
-  +-- Output_logs/generations/
-  |     +-- output.log / errors.log
-  +-- Answers.csv                         (only if --parse_gen)
-
-Productions/Graph_Productions/<Production_folder>/
-  +-- run_metadata.csv
+Productions/Graph_Productions/Normal_Runs/            (Test_Runs with --test)
+  run_metadata.csv
+  <dataset>_run/<sub_run>/
+    run_config.json                 models, paths, dataset, settings, quantization map, environment versions, done flags
+    Inference_configs.yaml          copy of the settings at launch
+    Generations/<org>/<model>[@@<quantization>]/
+      <temperature>-<frequency_penalty>_generations_terminated.parquet
+      <temperature>-<frequency_penalty>_execution_time.txt
+    Analysis/Graph_Numeric/answers/<org>__<model>[@@<quantization>].parquet     after parsing
+Productions/Tokenizer_Vocabs/<org>/<model>/vocab.json                           vocabularies of the tokenizers
 ```
 
-`Production_folder` is one of `Normal_Runs`, `Test_Runs` (`--test`), or `Toy_Runs` (dataset
-`Toy_example`).
+Generation Parquet row (one per request and token pair): `formatted_prompt` (the rendered text; emptied for
+`fail` rows), `token_pair`, `dataset_idx` (the `Index` of the CSV row), `output_text`, `scrapped_output`
+(filled at parsing), `output_token_ids` and `output_logprobs` (JSON strings; logprobs unset by default),
+`fail`, `success`, `gen_counter`.
 
-### Parquet row schema
+The second number of a file name is the frequency penalty, not the system prompt: one file holds every
+cell that shares the sampling key.
 
-`formatted_prompt`, `token_pair`, `dataset_idx`, `output_text`, `scrapped_output`,
-`output_token_ids` (JSON), `output_logprobs` (JSON), `fail`, `success`, `gen_counter`.
+## Parsing
 
-### Filename trap
+Stage 2 turns generations into answers tables:
 
-Raw generation files are named `{temperature}-{frequency_penalty}_generations_terminated.parquet`.
-**The second number is the frequency penalty, not the system prompt index.** `system_prompt_idx` is
-not encoded in the filename — it lives inside dataset rows. One file covers all `system_prompt_idx`
-values that share the same `(temperature, frequency_penalty)`.
+- `--parse_gen`, or `python scripts/parsing_generations.py --run_name <path under Productions/>`, parses
+  every finished model of a run (models whose answers file exists are skipped).
+- `--merge_sub_run` (with `parsing_generations.py`) first moves the `Generations/` folders and run
+  configurations of all sub-run folders under `--run_name` into `<run_name>/merged_sub_runs/` and deletes the
+  emptied sub-run folders, then parses there.
+- `python scripts/merge_runs.py --dest_run <run> --source_run <run> [--dry_run] [--move]` adds the parsed
+  per-model Parquet files of one run to another (same request dataset, no overwrite). Answers of runs of
+  different datasets can be combined by copying their per-model files into one directory.
 
----
+`answer_to_bit_string(text, token_pair)` scans the text left to right, matches the two symbols
+case-sensitively (the longer symbol first), writes `0` for the first and `1` for the second, and skips every
+other character; for `ali-yg`, `aliyg ali` gives `010`. A result shorter than `min_seq_length` is stored as
+an empty string.
 
-## Backend coverage
+Answers Parquet columns: `Token_pair`, `Model` (with `@@<quantization>` for quantized runs),
+`Dataset_Question Index` (the CSV `Index`), `gen_fail`, `gen_counter`, `Answer` (the bit string),
+`prompt_idx`, `temperature`, `frequency_penalty`, `system_prompt_idx`. The directory of such files is the
+input of the recompute tiers ([`../reproduction/recompute.md`](../reproduction/recompute.md)). Token ids go
+to a sibling `token_ids/` directory.
 
-| Backend | State | Notes |
-|---------|-------|-------|
-| vLLM | Fully implemented | `vLLM._generate()` is the only concrete backend used in `multi_model_infer()` |
-| HuggingFace (`transformers`) | Scaffolded only | `run_config.hf_models` is populated, but `multi_model_infer()` contains no HF dispatch loop |
-| OpenRouter | Scaffolded only | `_format_prompts_for_model()` raises `NotImplementedError` for OpenRouter |
+## Quantization
 
----
+`--quantization` values are the keys of `QUANTIZATION_VLLM_PARAMS`: `no_quantized`, `fp8` (vLLM
+`quantization="fp8"`), `bitsandbytes_int4` (vLLM `quantization="bitsandbytes"`, 4-bit). A quantized run is
+recorded as model `<hf id>@@<quantization>` and loads the weights folder of the base model. See
+[`quantized-models.md`](quantized-models.md).
 
-## Related documentation
+## SLURM
 
-| File | Content |
-|------|---------|
-| [dataset.md](dataset.md) | CSV schema, prompt configs, system prompts, token-pair sets |
-| [experiment.md](experiment.md) | What happens after inference: feature computation, classification |
-| [quantized-models.md](quantized-models.md) | `QUANTIZATION_VLLM_PARAMS` and per-quantization caveats |
-| [configuration.md](configuration.md) | Full Pydantic reference for experiment configs |
-| [../reproduction.md](../reproduction.md) | HPC/SLURM usage, Mode B step-by-step |
+`scripts/run_large_LLMs.slurm` is a template: set the account, partition and GPU constraint
+(`--account=YOUR_HPC_ACCOUNT`, `--partition=<YOUR_PARTITION>`, `-C <YOUR_GPU_CONSTRAINT>` are placeholders; options
+given to `sbatch` override them), load your environment where indicated, and create the log directories
+`runs_outputs/outputs/` and `runs_outputs/errors/`. The first argument is the script, the rest are its
+arguments; the job redirects the Hugging Face and pip caches below `${SCRATCH:-$HOME}/.cache`, sets
+`VLLM_WORKER_MULTIPROC_METHOD=spawn` and runs `srun python <script> <arguments>`:
+
+```
+sbatch --time=02:00:00 --gres=gpu:1 scripts/run_large_LLMs.slurm scripts/Run_Inferences.py \
+    --dataset FLiPS_ICML --model <hf id> --sub_run <name> --gpu 1 --parse_gen
+```
+
+`scripts/screen_run.sh <name> '' <delay-hours> <command...>` starts a command detached in a GNU screen
+session, optionally after a delay, and logs to `Productions/_screenlogs/<name>.log`.
+
+## Tests
+
+`python -m pytest tests/generation -q` runs on a CPU: request files, rendering rules, pinned templates, stop
+tokens, BOS handling, token-id prompts, retry accounting, tokenizer fallback and answer parsing, with a
+stub in place of the vLLM engine, plus a dry run of `make_run_config`. Tests that need `jinja2` or `transformers` (the
+`generation` extra) are skipped without them. Items not covered by CPU tests are listed in
+[`../reproduction/generation.md`](../reproduction/generation.md#verification-status).
+
+## Related
+
+[`dataset.md`](dataset.md) - [`quantized-models.md`](quantized-models.md) - [`scenarios.md`](scenarios.md) -
+[`testing.md`](testing.md)

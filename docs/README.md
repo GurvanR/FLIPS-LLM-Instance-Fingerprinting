@@ -1,17 +1,27 @@
 # Documentation
 
-User/admin-facing docs (installation, running, troubleshooting) live here at the top level. Internal codebase docs live under `codebase/`.
+Guides for installing, running and understanding the FLIPS code.
 
-## Reproduction & provenance
+## Reproduction
 
-- [`reproduction.md`](reproduction.md) — step-by-step Mode A (3 tiers) and Mode B reproduction.
-  - [`reproduction/mode-a.md`](reproduction/mode-a.md) — no-GPU analysis path, full command/figure tables.
-  - [`reproduction/mode-b.md`](reproduction/mode-b.md) — GPU from-scratch inference path.
-  - [`reproduction/custom-scenario.md`](reproduction/custom-scenario.md) — run your own scenario
-    (your own model × variation set) end to end, with a runnable example.
-- [`provenance.md`](provenance.md) — the 34→205→237 chain, the 25 LLMs + licenses, the 237 decomposition,
-  scenarios, dataset/prompt provenance, and data hosting.
+- [`reproduction.md`](reproduction.md): the five reproduction tiers (tests, analysis from the results archive,
+  recompute of the closed and open set, generation), commands, outputs, determinism, troubleshooting.
+  - [`reproduction/recompute.md`](reproduction/recompute.md): tiers 2 and 3, the feature grid and the two protocols.
+  - [`reproduction/generation.md`](reproduction/generation.md): tier 4, vLLM generation and parsing.
+  - [`reproduction/custom-scenario.md`](reproduction/custom-scenario.md): run the pipeline on your own set of instances.
+  - [`reproduction/compute-resources.md`](reproduction/compute-resources.md): cost of each tier.
+- [`provenance.md`](provenance.md): the benchmark (25 LLMs, 237 instances), licences and per-model output terms,
+  prompts and datasets, data hosting.
 
-## Codebase internals
+## Codebase
 
-- [`codebase/overview.md`](codebase/overview.md) — architecture portal.
+Start at [`codebase/overview.md`](codebase/overview.md); it links to
+[`classification.md`](codebase/classification.md), [`features.md`](codebase/features.md),
+[`experiment.md`](codebase/experiment.md), [`configuration.md`](codebase/configuration.md) and
+[`configuration-advanced.md`](codebase/configuration-advanced.md), [`dataset.md`](codebase/dataset.md),
+[`inference.md`](codebase/inference.md), [`quantized-models.md`](codebase/quantized-models.md),
+[`scenarios.md`](codebase/scenarios.md), [`testing.md`](codebase/testing.md) and
+[`conventions.md`](codebase/conventions.md).
+
+The analysis tier has its own README: [`../paper/README.md`](../paper/README.md). Data download and
+verification: [`../data/README.md`](../data/README.md).

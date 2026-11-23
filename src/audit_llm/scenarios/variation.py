@@ -9,22 +9,22 @@ copy of a base model" along the ``quantization`` / ``abliteration`` axes, plus a
 sampling request along ``temperature`` / ``system_prompt_idx``. A :class:`Variation`
 is the axis tuple *without* a base model bound yet — one cell of a variation grid.
 
-The two ``*_name`` / ``label`` properties reproduce the legacy on-disk and
-classification-label strings **byte-for-byte**. These strings are load-bearing:
+The ``storage_name`` / ``label`` properties build the on-disk and
+classification-label strings of the paper's corpus. These strings are load-bearing:
 they are parsed by ``audit_llm.xp_tools.model_filtering``
 (``full_var_model_name_to_original_model_name`` /
-``full_var_model_name_to_var_name``) and must not drift. The conventions:
+``full_var_model_name_to_var_name``) and are the class names of the stored results. The conventions:
 
 - **storage_name** — the on-disk / ``model_idx`` model id (what the variation
   suffix is appended to):
   base ``{base_model}``; quantized ``{base_model}@@{quant}``
   (``@@`` = :data:`audit_llm.file_io.QUANTIZATION_SEPARATOR`); abliterated → the
   resolved *different* repo id.
-- **label** — the classification-class label (``new_models_idx`` value):
-  base / quantized ``{storage_name}_temp-{t}_sp-{sp}`` (variation suffix built via
+- **label** — the classification-class label (the class name of the feature grid,
+  ``features.grid.class_name``, and of the stored results): ``{storage_name}_temp-{t}_sp-{sp}``
+  for every instance (variation suffix built via
   :func:`audit_llm.xp_tools.label_formatting.assemble_iterator_name_and_value`,
-  temperature first); abliterated ``{repo}_ablit`` with **no** temp/sp suffix
-  (matching ``"_".join([model_name, "ablit"])`` in ``prepare_dataset_features``).
+  temperature first).
 
 This module imports the resolvers, which pull in the vLLM backend module (whose
 import sets the multiprocessing start method). The package ``__init__`` therefore
@@ -46,7 +46,7 @@ NO_QUANTIZATION = "no_quantized"
 
 
 def _reject_abliterated_and_quantized(quantization: str, abliterated: bool) -> None:
-    """The released data never combines abliteration with quantization."""
+    """The paper's instances never combine abliteration with quantization."""
     if abliterated and quantization != NO_QUANTIZATION:
         raise ValueError(
             "An instance cannot be both abliterated and quantized "
@@ -70,7 +70,7 @@ class Variation:
     abliterated: bool = False
 
     def __post_init__(self) -> None:
-        # Coerce to the exact types the legacy label strings were produced from,
+        # Coerce to the exact types the label strings are built from,
         # so ``temp-1.0`` keeps its trailing ``.0`` and ``sp--1`` is an int.
         object.__setattr__(self, "temperature", float(self.temperature))
         object.__setattr__(self, "system_prompt_idx", int(self.system_prompt_idx))
@@ -118,7 +118,7 @@ class Instance:
 
     @property
     def _variation_suffix(self) -> str:
-        """The ``temp-<t>_sp-<sp>`` suffix (temperature first), byte-identical to legacy."""
+        """The ``temp-<t>_sp-<sp>`` suffix (temperature first), byte-identical to the stored labels."""
         return "_".join(
             [
                 assemble_iterator_name_and_value("temperature", self.temperature),
@@ -128,11 +128,7 @@ class Instance:
 
     @property
     def label(self) -> str:
-        """The classification-class label (the ``new_models_idx`` value)."""
-        if self.abliterated:
-            # Mirrors data_preparation.py: '_'.join([abliterated_repo, 'ablit']);
-            # no temp/sp suffix — abliterated cells are pinned, never crossed.
-            return "_".join([self.storage_name, "ablit"])
+        """The classification-class label (the class name of the feature grid and of the stored results)."""
         return f"{self.storage_name}_{self._variation_suffix}"
 
     @property

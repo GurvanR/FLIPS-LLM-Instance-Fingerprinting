@@ -1,19 +1,17 @@
-# Model registry for FLIPS - the model-universe source of truth.
+# Model registry for FLIPS - the models of the paper.
 #
-# Every model is addressed by its Hugging Face Hub id and resolves through the
-# standard Hugging Face cache. There are deliberately NO cluster filesystem
-# paths in this file. Cluster users overlay paths in config/models.hpc.example.yaml
-# (see AUDIT_LLM_MODEL_CACHE in docs/codebase/conventions.md).
+# Every model is addressed by its Hugging Face Hub id, which resolves through the standard Hugging Face cache.
+# The weights can be read from a local directory instead: set AUDIT_LLM_MODEL_CACHE to a directory holding
+# one folder per model, $AUDIT_LLM_MODEL_CACHE/<org>/<model> (see .env.example).
 
 _metadata:
   schema_version: 1
   description: >-
     The 25 base LLMs benchmarked in the FLIPS paper plus their quantized and
-    abliterated variants, addressed by Hugging Face Hub id. Consumed by the
-    analysis-layer instance enumerator as the canonical model universe.
-  paper_doi: "10.0000/PLACEHOLDER"  # TODO: set to the Zenodo/paper DOI on release
+    abliterated variants, addressed by Hugging Face Hub id. Read by the scenario
+    loader, which validates the model selection of a scenario against it.
 
-# 25 base LLMs (cross-checked against the historical model inventory).
+# 25 base LLMs.
 base_models:
   # Cohere
   - CohereForAI/c4ai-command-r-plus
@@ -81,15 +79,11 @@ quantized_variants:
     quantization: bitsandbytes_int4
     alias: "mistralai/Mistral-7B-Instruct-v0.3@@bitsandbytes_int4"
 
-# Abliterated variants: 5 data-backed entries. The base -> abliterated_hf_id
-# mapping is preserved verbatim from
-# audit_llm.models_management.model_names.ABLITERATED_MODELS_MAP_TO_ORIGINAL
-# (the mapping the released data was generated against). Abliterated instances
-# are pinned to temperature=1.0 / system_prompt=-1 (the paper default; see
-# xp_tools/data_preparation.py).
+# Abliterated variants: 5 checkpoints. Each abliterated checkpoint is attributed to the base LLM below, as in the
+# paper's figures (the same mapping as audit_llm.models_management.model_names.ABLITERATED_MODELS_MAP_TO_ORIGINAL).
+# Abliterated instances are pinned to temperature=1.0 / system_prompt=-1 (the paper default).
 abliterated_variants:
-  # NOTE: the abliterated repo name reads "Meta-Llama-3-8B" but the source maps
-  # it to the 3.1-8B base; preserved verbatim from the SSOT.
+  # The repo name reads "Meta-Llama-3-8B"; it is attributed to the Llama-3.1-8B-Instruct base.
   - base: meta-llama/Llama-3.1-8B-Instruct
     abliterated_hf_id: failspy/Meta-Llama-3-8B-Instruct-abliterated-v3
     pinned: {temperature: 1.0, system_prompt: -1}
@@ -105,7 +99,3 @@ abliterated_variants:
   - base: microsoft/Phi-3-medium-128k-instruct
     abliterated_hf_id: dphn/dolphin-2.9.2-Phi-3-Medium-abliterated
     pinned: {temperature: 1.0, system_prompt: -1}
-  # config-listed; absent from released data:
-  # - base: microsoft/Phi-3-mini-128k-instruct
-  #   abliterated_hf_id: failspy/Phi-3-mini-128k-instruct-abliterated-v3
-  #   pinned: {temperature: 1.0, system_prompt: -1}

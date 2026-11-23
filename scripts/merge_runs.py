@@ -2,21 +2,19 @@
 Merge a fully-parsed source run into a destination run.
 
 Both runs must have already been processed by parsing_generations.py.
-Dest runs in the old monolithic format (Answers.parquet / TokenIDsAnswers.parquet)
-are automatically migrated to per-model format before merging.
 
 Usage:
     python scripts/merge_runs.py --dest_run My_Dataset_run \\
-                                 --source_run My_Dataset_run_batch2
+                                 --source_run My_Dataset_run_part2
 
     # Preview without touching files
     python scripts/merge_runs.py --dest_run My_Dataset_run \\
-                                 --source_run My_Dataset_run_batch2 \\
+                                 --source_run My_Dataset_run_part2 \\
                                  --dry_run
 
     # Move files instead of copying (destructive — source parquets are removed)
     python scripts/merge_runs.py --dest_run My_Dataset_run \\
-                                 --source_run My_Dataset_run_batch2 \\
+                                 --source_run My_Dataset_run_part2 \\
                                  --move
 
 Run names are relative to Productions/ (repo root).
@@ -26,8 +24,6 @@ Productions/<run_name>/merged_sub_runs/ — this script detects that automatical
 
 import argparse
 import json
-import os
-import pickle
 import shutil
 import sys
 from pathlib import Path
@@ -50,18 +46,12 @@ def _find_run_config(run_path: Path) -> tuple[dict, Path]:
     candidates = [
         run_path / "merged_sub_runs" / "run_config.json",
         run_path / "run_config.json",
-        run_path / "merged_sub_runs" / "run_config.pickle",
-        run_path / "run_config.pickle",
     ]
     for path in candidates:
         if path.exists():
-            if path.suffix == ".json":
-                with open(path) as f:
-                    return json.load(f), path
-            else:
-                with open(path, "rb") as f:
-                    return pickle.load(f), path  # type: ignore[return-value]
-    raise FileNotFoundError(f"No run_config (.json or .pickle) found under {run_path}")
+            with open(path) as f:
+                return json.load(f), path
+    raise FileNotFoundError(f"No run_config.json found under {run_path}")
 
 
 def _find_analysis_dir(run_path: Path) -> Path:
@@ -142,33 +132,21 @@ def _transfer_parquets(
 
 def _merge_model_entries(dest_config: dict, src_config: dict) -> None:
     """Add model entries from src_config into dest_config in-place."""
-    for key in (
-        "vllm_models",
-        "hf_models",
-        "openrouter_models",
-        "vllm_model_path",
-        "hf_model_path",
-        "openrouter_model_path",
-    ):
+    for key in ("vllm_models", "vllm_model_path"):
         if key not in src_config:
             continue
         if key not in dest_config:
             dest_config[key] = {}
         dest_config[key].update(src_config[key])
 
-    # Reset progression counters to 0/N after merging
-    for models_key, prog_key in (
-        ("vllm_models", "vllm_models_progression"),
-        ("hf_models", "hf_models_progression"),
-    ):
-        if prog_key in dest_config:
-            n = len(dest_config.get(models_key, {}))
-            dest_config[prog_key] = f"0/{n}"
+    # Reset the progression counter to 0/N after merging
+    if "vllm_models_progression" in dest_config:
+        dest_config["vllm_models_progression"] = f"0/{len(dest_config.get('vllm_models', {}))}"
 
 
 def _save_run_config(config: dict, config_path: Path, dry_run: bool) -> None:
-    """Persist the merged run_config as JSON (upgrading from pickle if needed)."""
-    save_path = config_path.with_suffix(".json")
+    """Persist the merged run_config as JSON."""
+    save_path = config_path
     if dry_run:
         print(f"  [dry_run] Would save updated run_config → {save_path}")
         return
@@ -242,7 +220,7 @@ def main() -> None:
     print(f"Source dataset        : {src_dataset}")
     print(f"Dest   dataset        : {dest_dataset}\n")
 
-    # --- compatibility checks ---
+    # --- consistency checks ---
     if src_dataset != dest_dataset:
         print(
             f"ERROR: Dataset mismatch — runs used different source CSVs.\n"
@@ -256,7 +234,7 @@ def main() -> None:
         print(
             f"WARNING: scrapping_rule differs (source={src_rule!r}, dest={dest_rule!r}).\n"
             f"  Source parquets will be placed under the dest rule directory ({dest_rule!r}).\n"
-            f"  Answer formats may be incompatible. Continue? [y/N] ",
+            f"  Answer formats may differ. Continue? [y/N] ",
             end="",
             flush=True,
         )
@@ -269,31 +247,6 @@ def main() -> None:
     # --- parquet transfer ---
     src_analysis = _find_analysis_dir(src_path)
     dest_analysis = _find_analysis_dir(dest_path)
-
-    # Guard: if dest still uses the old monolithic format (Answers.parquet with no
-    # per-model answers/ directory), copying source files into answers/ would create
-    # that directory and cause read_parquet_dir_or_monolithic to read ONLY the new
-    # files, silently dropping all of dest's original models.
-    # Fix: migrate dest to per-model format first via the existing migration utility.
-    dest_rule_dir = dest_analysis / dest_rule
-    answers_dir = dest_rule_dir / "answers"
-    has_per_model_answers = answers_dir.exists() and any(answers_dir.glob("*.parquet"))
-    has_monolithic_answers = (dest_rule_dir / "Answers.parquet").exists()
-
-    if has_monolithic_answers and not has_per_model_answers:
-        print(
-            "Dest has old monolithic format (Answers.parquet / TokenIDsAnswers.parquet).\n"
-            "Migrating dest to per-model format before merging ..."
-        )
-        if not args.dry_run:
-            from audit_llm.migration import migrate_monolithic_parquet
-            migrate_monolithic_parquet(dest_rule_dir)
-            print("  Migration complete.\n")
-        else:
-            print(
-                "  [dry_run] Would call migrate_monolithic_parquet on "
-                f"{dest_rule_dir.relative_to(productions)}\n"
-            )
 
     print(f"Transferring Parquet files:")
     print(f"  from  {src_analysis.relative_to(productions)}/{src_rule}/")
@@ -310,9 +263,7 @@ def main() -> None:
     print(f"\nMerging run_config ...")
     if args.dry_run:
         src_vllm = list(src_config.get("vllm_models", {}).keys())
-        src_hf = list(src_config.get("hf_models", {}).keys())
         print(f"  [dry_run] Would add vllm_models : {src_vllm}")
-        print(f"  [dry_run] Would add hf_models   : {src_hf}")
         _save_run_config(dest_config, dest_cfg_path, dry_run=True)
     else:
         _merge_model_entries(dest_config, src_config)

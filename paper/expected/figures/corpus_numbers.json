@@ -1,0 +1,149 @@
+{
+ "fail_rate": {
+  "overall": 0.0223,
+  "top3": [
+   [
+    "mistralai/Mistral-7B-Instruct-v0.1",
+    0.1135
+   ],
+   [
+    "Qwen/Qwen2-72B-Instruct",
+    0.1045
+   ],
+   [
+    "CohereLabs/aya-23-8B",
+    0.0578
+   ]
+  ],
+  "n_zero": 1
+ },
+ "seqlen": {
+  "per_llm": {
+   "CohereForAI/c4ai-command-r-plus": {
+    "mean_len_valid": 418.0935,
+    "share_ge500": 0.3483,
+    "share_lt100": 0.0015
+   },
+   "CohereForAI/c4ai-command-r-v01": {
+    "mean_len_valid": 354.356,
+    "share_ge500": 0.2501,
+    "share_lt100": 0.042
+   },
+   "CohereLabs/aya-23-35B": {
+    "mean_len_valid": 422.7939,
+    "share_ge500": 0.4717,
+    "share_lt100": 0.0035
+   },
+   "CohereLabs/aya-23-8B": {
+    "mean_len_valid": 445.8055,
+    "share_ge500": 0.5081,
+    "share_lt100": 0.0578
+   },
+   "HuggingFaceH4/zephyr-7b-beta": {
+    "mean_len_valid": 429.1067,
+    "share_ge500": 0.411,
+    "share_lt100": 0.0024
+   },
+   "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO": {
+    "mean_len_valid": 368.8647,
+    "share_ge500": 0.3874,
+    "share_lt100": 0.0054
+   },
+   "Qwen/Qwen2-1.5B-Instruct": {
+    "mean_len_valid": 413.4109,
+    "share_ge500": 0.446,
+    "share_lt100": 0.039
+   },
+   "Qwen/Qwen2-72B-Instruct": {
+    "mean_len_valid": 417.9056,
+    "share_ge500": 0.3815,
+    "share_lt100": 0.1045
+   },
+   "Qwen/Qwen2-7B-Instruct": {
+    "mean_len_valid": 412.0053,
+    "share_ge500": 0.4498,
+    "share_lt100": 0.0072
+   },
+   "Qwen/Qwen3-30B-A3B-Instruct-2507": {
+    "mean_len_valid": 484.0441,
+    "share_ge500": 0.6271,
+    "share_lt100": 0.0033
+   },
+   "abacusai/Smaug-Llama-3-70B-Instruct": {
+    "mean_len_valid": 459.1657,
+    "share_ge500": 0.3437,
+    "share_lt100": 0.0
+   },
+   "google/gemma-2-27b-it": {
+    "mean_len_valid": 404.4996,
+    "share_ge500": 0.3385,
+    "share_lt100": 0.0004
+   },
+   "google/gemma-2-9b-it": {
+    "mean_len_valid": 298.003,
+    "share_ge500": 0.2209,
+    "share_lt100": 0.0169
+   },
+   "gradientai/Llama-3-8B-Instruct-Gradient-1048k": {
+    "mean_len_valid": 329.5549,
+    "share_ge500": 0.1345,
+    "share_lt100": 0.045
+   },
+   "meta-llama/Llama-3.1-8B-Instruct": {
+    "mean_len_valid": 371.4489,
+    "share_ge500": 0.2101,
+    "share_lt100": 0.0109
+   },
+   "meta-llama/Meta-Llama-3-8B-Instruct": {
+    "mean_len_valid": 354.5097,
+    "share_ge500": 0.2481,
+    "share_lt100": 0.0364
+   },
+   "meta-llama/Meta-Llama-3.1-70B-Instruct": {
+    "mean_len_valid": 446.8415,
+    "share_ge500": 0.3761,
+    "share_lt100": 0.0
+   },
+   "microsoft/Phi-3-medium-128k-instruct": {
+    "mean_len_valid": 343.7885,
+    "share_ge500": 0.1969,
+    "share_lt100": 0.0291
+   },
+   "microsoft/Phi-3-medium-4k-instruct": {
+    "mean_len_valid": 323.3011,
+    "share_ge500": 0.1444,
+    "share_lt100": 0.0198
+   },
+   "microsoft/Phi-3-mini-128k-instruct": {
+    "mean_len_valid": 383.0407,
+    "share_ge500": 0.216,
+    "share_lt100": 0.0327
+   },
+   "microsoft/Phi-3-mini-4k-instruct": {
+    "mean_len_valid": 374.5126,
+    "share_ge500": 0.2329,
+    "share_lt100": 0.0116
+   },
+   "mistralai/Mistral-7B-Instruct-v0.1": {
+    "mean_len_valid": 351.4723,
+    "share_ge500": 0.1264,
+    "share_lt100": 0.1135
+   },
+   "mistralai/Mistral-7B-Instruct-v0.2": {
+    "mean_len_valid": 405.9849,
+    "share_ge500": 0.1612,
+    "share_lt100": 0.0002
+   },
+   "mistralai/Mistral-7B-Instruct-v0.3": {
+    "mean_len_valid": 441.3115,
+    "share_ge500": 0.3012,
+    "share_lt100": 0.0001
+   },
+   "upstage/SOLAR-10.7B-Instruct-v1.0": {
+    "mean_len_valid": 351.0512,
+    "share_ge500": 0.1317,
+    "share_lt100": 0.0132
+   }
+  }
+ }
+}

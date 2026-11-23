@@ -1,31 +1,27 @@
-# Data license — FLiPS released data members
+# Data license — FLIPS released data
 
 SPDX-License-Identifier: CC-BY-4.0
 SPDX-FileCopyrightText: 2026 Pôle d'Expertise de la Régulation Numérique <contact@peren.gouv.fr>
 
-The FLiPS **data and derived features** released alongside this repository are
+The FLIPS **data and derived results** released alongside this repository are
 licensed under **Creative Commons Attribution 4.0 International (CC-BY-4.0)**.
-The full text is in [`../LICENSES/CC-BY-4.0.txt`](../LICENSES/CC-BY-4.0.txt).
+The full text is in `LICENSES/CC-BY-4.0.txt` of the code repository.
 
 ## What this covers
 
-The members enumerated in [`manifest.sha256`](manifest.sha256):
+The members enumerated in `data/manifest.sha256` of the code repository and the archives listed in
+`data/archives.sha256`:
 
-- `Productions/FLiPS_ICML_light_subset/` — the in-repo, zero-download CPU smoke
-  subset (committed in this repository).
-- `Productions/FLiPS_ICML_light_run/` — 12-model FLIPS dev slice (re-classifiable;
-  backs the out-of-box tier).
-- `Productions/LLMmap_ICML_run/` — 205-class LLMmap traces (backs the LLMmap E3 arm).
-- `Productions/answers_2/` — full-grid quantized answers (2 of 4 models).
-- `Productions/FLiPS_ICML_quantized/` — temp=0.2 quantization coverage gap.
-- `Productions/Intersection_vocab/` — tokenizer-vocabulary intersection (tracked
-  in-repo; an import-time dependency, not a downloadable archive).
-- `Productions/FLiPS_ICML_run/` — the off-disk headline run (released separately;
-  see [`README.md`](README.md)).
+- `flips_results.zip` — cached analysis results (accuracies, confusion matrices,
+  per-instance statistics, feature importances, open-set sweeps, the stored LLMmap-IF
+  baseline accuracies). They are unpacked into `data/results/`.
+- `flips_release_data.tar.gz` — the generated answers (bit sequences) and token ids of every
+  model instance and token pair, for recomputing the features, and the raw run of the LLMmap
+  baseline (trained classifiers, logs, evaluations). They are unpacked into `Productions/`.
 
-These are computed bit-sequence features and classification artefacts derived from
-model outputs. Our contribution over them (feature tables, manifests, the light
-subset) is offered under CC-BY-4.0.
+These are model outputs, computed statistics and classification artefacts derived from model
+outputs. Our contribution over them (result tables, manifests, packaging) is
+offered under CC-BY-4.0.
 
 ## Per-model output constraints layered ON TOP
 
@@ -33,9 +29,9 @@ The released members are derived from the **outputs** of third-party models whos
 terms flow through to those derivations. CC-BY-4.0 governs our packaging; the
 underlying model outputs additionally carry the originating model's terms, notably:
 
-- **Cohere (`CohereForAI/c4ai-command-r-plus`, `c4ai-command-r-v01`)** — outputs are
-  governed by **CC-BY-NC 4.0** (non-commercial). Any redistribution or use of the
-  Cohere-derived rows is restricted to non-commercial use.
+- **Cohere (`CohereForAI/c4ai-command-r-plus`, `c4ai-command-r-v01`, `CohereLabs/aya-23-8B`,
+  `aya-23-35B`)** — outputs are governed by **CC-BY-NC 4.0** (non-commercial). Any
+  redistribution or use of the Cohere-derived rows is restricted to non-commercial use.
 - **Google Gemma (`google/gemma-2-9b-it`, `gemma-2-27b-it`)** — outputs are subject to
   the **Gemma Terms of Use** and Prohibited Use Policy.
 
@@ -44,6 +40,6 @@ CC-BY-4.0 and that model's originating terms.
 
 ## Model weights
 
-**Model weights are NOT redistributed** by this project. Only derived bit-sequence
-features / classification artefacts are released. Obtain weights from their original
-sources (Hugging Face Hub) under their own licenses.
+**The weights of the audited models are NOT redistributed** by this project. Only their
+generated outputs, result artefacts and the LLMmap baseline's trained classifiers are released.
+Obtain model weights from their original sources (Hugging Face Hub) under their own licenses.

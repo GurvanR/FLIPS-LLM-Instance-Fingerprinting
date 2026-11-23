@@ -1,258 +1,114 @@
-# Configuration Reference (Advanced)
+# Configuration: field reference
 
-Complete schema reference for experiment YAML configuration files, validated by Pydantic in
-`src/audit_llm/experiment_config_schema.py`.
+Complete reference of the experiment YAML schema, `src/audit_llm/experiment_config_schema.py`. For a short guide with
+examples, see [`configuration.md`](configuration.md). "Read by" names the function that consumes the field
+(`pipeline.py` unless stated otherwise); the classifier and protocol functions are described in
+[`classification.md`](classification.md).
 
-> New here? Start with the simple **[configuration.md](configuration.md)** — it covers the few
-> keys most experiments actually set. This page documents *every* field, including the ones that
-> are defaulted automatically.
+## Loading and validation
 
----
+`load_experiment_config(path)` reads the YAML with a loader that raises `ValueError` on a duplicate key (message
+`Duplicate YAML key '<key>' found at line <n>`), requires a mapping at the top level, validates it with the pydantic model
+`ExperimentConfig`, and returns `model_dump()`: a plain dict with every default filled in and the nested sections as dicts.
 
-## Loading & validation
+| condition | result |
+|---|---|
+| duplicate key, at any level | `ValueError` |
+| top level is not a mapping | `ValueError` |
+| unknown key, at any level (for example `protocol.n_trian`) | `pydantic.ValidationError`, the key is named |
+| `experiment_fun` missing or not `closed_set` / `open_set` | `pydantic.ValidationError` |
+| `open_set` section with `experiment_fun: closed_set` | `pydantic.ValidationError` ("an 'open_set' section is only valid with experiment_fun: open_set") |
+| a `batch_sizes` value below 1 | `pydantic.ValidationError` ("batch_sizes must be >= 1") |
+| a value that cannot be converted to the field's type (for example `n_train: abc`; a numeric string such as `'300'` is converted) | `pydantic.ValidationError` |
 
-```python
-from audit_llm.experiment_config_schema import load_experiment_config
+With `experiment_fun: open_set` and no `open_set` section, the section takes its defaults. No field has a range check
+beyond the ones in the table. `python -m audit_llm.pipeline run` loads the file with this function.
 
-config = load_experiment_config("path/to/config.yaml")  # returns dict
-```
+## Top-level fields (`ExperimentConfig`)
 
-- Custom `_UniqueKeyLoader` raises `ValueError` on duplicate YAML keys
-- Pydantic `ExperimentConfig.model_validate()` validates structure and types
-- All models use `extra="allow"` for forward compatibility
-- Returns a plain `dict` via `model_dump()` for backward compatibility
+| field | type | default | read by |
+|---|---|---|---|
+| `experiment_fun` | `closed_set` or `open_set` | required | `run_experiment` (cell enumeration), `_run_cell` (which cell function), `_cell_data` (which splits to build), `_summary` (which metrics) |
+| `xp_name` | string or none | none | recorded in `summary.json`. `pipeline.main` sets it to the config file name without extension when unset |
+| `description` | string or none | none | not read by any function; free text for the reader of the file |
+| `token_pairs` | list of strings | `[]` | `run_experiment`: the pairs to evaluate, `[]` = every pair of the grid (a pair absent from the grid raises `KeyError`); with `--answers`, also the pairs for which the grid is computed |
+| `scenario` | string or none | none (`closed_set.yaml` and `open_set.yaml` set `main`) | `run_experiment` through `scenario_instances`, see below |
+| `min_seq_length` | int | 100 | `features.grid.build_grid`, when the grid is computed during `run --answers`; ignored with `--grid`, whose `<grid dir>/meta.json` holds the value used by `build-grid --min-seq-length` |
+| `batch_sizes` | list of ints, each >= 1 | `[1, 2, 4, 8, 16, 32, 64]` | the values of `N_t`: `sample_batches` in `closed_set_cell`, `evaluate_open_set_cell` in `open_set_cell`, and the keys of `by_n_t` in `_summary` |
+| `protocol` | `ProtocolConfig` | defaults below | `_cell_data` and the cell functions |
+| `classifier` | `ClassifierConfig` | defaults below | `HierarchicalClassifier`; in the open set also `UnseenDetector` |
+| `open_set` | `OpenSetConfig` or none | none (open set: defaults) | `open_set_cell`; valid only with `experiment_fun: open_set` |
+| `n_workers` | int | 1 | `run_experiment`: a process pool of that size evaluates the cells when it is above 1, otherwise they run one after the other |
 
----
+## `protocol` (`ProtocolConfig`)
 
-## Auto-applied defaults
+| field | type | default | read by |
+|---|---|---|---|
+| `splits` | list of ints | `[0, 1, 2, 3, 4]` | closed set only: the cells of `run_experiment`, and the number of splits generated (largest value + 1) by `_cell_data`; ignored in the open set |
+| `test_per_class` | int | 128 | `protocol.make_splits`: each split has `test_per_class` x (number of instances) test rows |
+| `inner_val` | int | 40 | `protocol.carve_validation`: validation rows set aside per instance (at most a third of its training rows) |
+| `n_train` | int | 300 | `N_r`: `protocol.nested_draw` (closed set), `protocol.independent_draw` (open set) |
+| `seed` | int | 0 | `protocol.seeded` streams: the validation rows of the cell, and the open-set training draw. The split seed (42) is not configurable |
 
-These `classification_config` fields are filled in automatically — omit them unless you want a
-non-default value:
+## `classifier` (`ClassifierConfig`)
 
-| Field | Default applied | Notes |
-|-------|-----------------|-------|
-| `classifiers` | `["XGBoost"]` | Add more names to train several classifiers |
-| `splitter_type` | `"StratifiedShuffleSplit"` | CV splitter from `SPLITTER_MAP` |
-| `default_normalization` | `"auto"` | Per-feature method auto-selected unless overridden |
-| `normalization_methods` | `{seq_length: none}` | Per-feature overrides; `seq_length` is left un-normalized |
-| `batch_types` | **derived from `batch_prediction_sizes`** | size `1` → `tp_wise`; any size `> 1` → `mix_tp_at_pred`. Set explicitly to override. |
+| field | type | default | read by |
+|---|---|---|---|
+| `global_rounds` | int | 357 | boosting rounds of the global classifier, `HierarchicalClassifier` and the fold classifiers of `UnseenDetector` |
+| `n_jobs` | int | 4 | threads of the global classifier and of the fold classifiers (per-LLM classifiers use 1) |
+| `round_selection_patience` | int | 60 | early-stopping patience of `xgb.select_rounds` (per-LLM classifiers) |
+| `round_selection_max` | int | 1000 | maximum number of rounds tried by `xgb.select_rounds` |
 
----
+## `open_set` (`OpenSetConfig`)
 
-## `ExperimentConfig` — top-level fields
+All fields are read by `open_set_cell`, which passes them to `unseen_detector.evaluate_open_set_cell`.
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `experiment_fun` | `str` | **required** | Experiment function name; validated against `VALID_EXPERIMENT_FUNCTIONS` |
-| `alpha` | `float` | `0.05` | Statistical significance threshold |
-| `features` | `str\|None` | `None` | Feature set name (e.g. `SmallNist`, `SmallNist_only_pv`) |
-| `min_seq_length` | `int` | `100` | Minimum bit sequence length filter |
-| `PRNGs` | `list\|str\|None` | `None` | PRNG models: `None` = skip, `[]` = all, `[names]` = specific |
-| `models` | `list[str]` | `[]` | Model filter: `[]` = all available models |
-| `token_pairs` | `list[str]` | `[]` | Token pair filter: `[]` = all in `token_pairs_set` |
-| `models_to_remove` | `list[str]\|None` | `None` | Blacklisted models (set at runtime from `Black_list_models_in_runs.json`) |
-| `sampling_parameters` | `SamplingParameters` | — | Sampling parameter filters (see below) |
-| `scenario` | `str\|None` | `None` | Declarative model × variation selection (`config/scenarios/*.yaml`); the forward path (see [variation selection](#variation-selection-scenario-vs-model_variations)) |
-| `model_variations` | `str\|dict\|list[dict]\|None` | `None` | Direct model × variation grid; used (with `quantized_model_variations` / `abliterated_models`) when `scenario` is unset — the path the shipped configs currently take |
-| `abliterated_models` | `list[str]\|None` | `None` | `None` = skip, `[]` = all, `[names]` = specific |
-| `include_quantized` | `list[str]\|None` | `None` | `None` = exclude all `@@`-suffixed models; `[]` = include all; `["fp8"]` = specific methods |
-| `calculations` | `dict[str,str]\|None` | `None` | Iterator definitions |
-| `figures` | `dict[str,FigureConfig]\|None` | `None` | Named figure configurations |
-| `train_sizes` | `list[int]\|None` | `None` | Training sizes for ablation studies |
-| `classification_config` | `ClassificationConfig\|None` | `None` | Classification pipeline settings |
-| `set_constant_seq_length` | `int\|None` | `None` | Truncate all bit sequences to exactly this length before NIST computation |
-| `dr_method` | `str\|None` | `"umap"` | Dimensionality reduction for `feature_space_visualization`: `"umap"` or `"tsne"` |
-| `xp_name` | `str\|None` | `None` | Auto-set at runtime: `{config_name}_{xp_suffix}` |
+| field | type | default | read by |
+|---|---|---|---|
+| `cells` | list of `[split, draw]` pairs of ints | `[[0, 0], [1, 1], [2, 2], [0, 3], [3, 4]]` | `run_experiment` (one cell per token pair and pair of values); `draw` selects the Unseen instances and keys the detector's random streams |
+| `n_unseen` | int | 23 | `draw_unseen`: instances treated as Unseen, drawn with `default_rng([4242, draw])` |
+| `n_folds` | int | 10 | `assign_class_folds`: class folds of the Known instances (a value other than 10 uses a different random stream) |
+| `held_out_per_class` | int | 40 | `UnseenDetector.fit_folds`: rows of each Known instance set aside in a fold (at most a third) |
+| `unseen_rows_per_instance` | int | 40 | `fit_folds`: rows of each held-out instance used to draw simulated Unseen samples |
+| `known_batches_per_instance` | int | 10 | `UnseenDetector.samples`: Known samples per instance |
+| `unseen_batches_per_instance` | int | 40 | `samples`: simulated Unseen samples per held-out instance |
+| `min_rows_per_instance` | int | 120 | `samples`: an instance with fewer training rows gives no detector sample |
+| `unseen_weight_share` | float | 0.097 | `sample_weights`: share of the regression weight carried by the simulated Unseen samples |
+| `regularization_c` | float | 0.1 | `LogisticDetector`: `C` of the regularised logistic regression |
+| `target_recall` | float | 0.5 | `threshold`: `tau` is the `1 - target_recall` quantile of the out-of-fold scores of the simulated Unseen samples |
 
-### Valid experiment functions
+`sample_statistics` needs at least 10 instances in the classifier whose output it describes, and at least 3 LLMs with 2 or
+more of those instances, for every statistic to be finite; a scenario for the open set has to be large enough for that.
 
-```
-Nist_perf_chart
-Seq_Length_visualization
-Valid_count_chart
-classify
-classify_cross_token_pairs
-batch_classification_across_token_pairs
-Batch_Classification_across_token_pairs    (legacy alias)
-LLMmap_classification
-Save_pv_in_parquet
-feature_space_visualization
-```
+## The `scenario` key
 
----
+`scenario: <name>` restricts the experiment to the instances of a scenario file. `scenario_instances` takes the value as a
+path if a file or directory of that name exists (relative to the working directory, so run from the repository root),
+otherwise as `config/scenarios/<name>.yaml`. The file is loaded and validated by `audit_llm.scenarios.loader.load_scenario`
+against the model registry `config/models.yaml`, and expanded to instances named
+`<model>[@@<quant>]_temp-<temperature>_sp-<system prompt index>`. These names must all be classes of the grid, otherwise
+`Grid.select_classes` raises `KeyError`; the grid is then restricted to them, keeping its class order. The restricted
+grid is held in memory. In the open set, `n_unseen` instances are drawn among the instances kept. The rules of a scenario file are in
+[`scenarios.md`](scenarios.md); a worked example is in [`../reproduction/custom-scenario.md`](../reproduction/custom-scenario.md).
+`config/scenarios/main.yaml` defines the 237 instances of the benchmark.
 
-## `SamplingParameters`
-
-Controls which sampling parameter values to include. Empty list = all available values.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `system_prompt_idx` | `list[int]` | `[]` | System prompt indices to include |
-| `temperature` | `list[float]` | `[]` | Temperature values to include |
-| `frequency_penalty` | `list[float]` | `[0.0]` | Frequency penalty values |
-
-`extra="allow"`: any additional sampling parameter key is accepted.
-
-```yaml
-sampling_parameters:
-  system_prompt_idx: [-1, 0, 3]
-  temperature: [0.4, 0.6, 0.8, 1.0]
-  frequency_penalty: [0.0]
-```
-
----
-
-## `ClassificationConfig`
-
-Fields marked **(auto)** are filled in automatically (see
-[Auto-applied defaults](#auto-applied-defaults)); omit them unless overriding.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `classifiers` | `list[str]` | `["XGBoost"]` **(auto)** | Classifier names (e.g. `XGBoost`, `Random Forest`, `Logistic Regression`) |
-| `splitter_type` | `str` | `"StratifiedShuffleSplit"` **(auto)** | CV splitter |
-| `n_splits` | `int` | `2` | Number of CV splits |
-| `test_size` | `float\|int` | `0.5` | Test set size (float=fraction, int=absolute per-class count) |
-| `force_class_size` | `int\|"auto"\|None` | `"auto"` | Per-class cap. `"auto"`=balance to the smallest class (undersample only, no oversampling/leakage); `int`=cap each class to ≤N (must be `> test_size`, checked at load); `None`=no balancing |
-| `classifier_metrics` | `list[str]` | `["accuracy"]` | Metrics to compute |
-| `batch_prediction_sizes` | `list[int]\|None` | `None` | Batch sizes for batch prediction |
-| `batch_types` | `list[str]\|None` | derived **(auto)** | Batch modes: `tp_wise`, `mix_tp_at_pred`, `mix_tp_at_train`. When unset, derived from `batch_prediction_sizes` (size `1` → `tp_wise`, size `> 1` → `mix_tp_at_pred`) |
-| `openset` | `bool` | `false` | Enable open-set classification |
-| `m_test_size` | `float\|int` | `5` | Number of unknown models for open-set |
-| `openset_m_splits` | `int` | `10` | Number of open-set splits |
-| `default_normalization` | `str` | `"auto"` **(auto)** | Default normalization: `auto`, `none`, `standard`, etc. |
-| `normalization_methods` | `dict[str,str]` | `{seq_length: none}` **(auto)** | Per-feature normalization overrides |
-| `unique_tp_in_mix` | `int\|list[int]\|str` | `['max']` **(auto)** | Distinct token pairs per mixed batch. `'max'` (default) = `bs` distinct pairs (needs `C(n_tp, bs) >= max_nb_of_uplet` for each plotted `bs`); an `int`/`[int]` caps it — pin a small value when few token pairs ship |
-| `max_nb_of_uplet` | `int\|None` | `None` | Maximum number of token-pair tuples in mixing |
-| `compute_confusion_matrices` | `bool` | `false` | Compute and plot confusion matrix heatmaps (tables always computed) |
-| `store_prediction_probas` | `bool` | `true` **(auto)** | Keep per-sample predicted probabilities (needed for PR curves / probability tables) |
-| `compute_micro_pr_curve` | `bool` | `true` **(auto)** | Compute the micro-averaged precision–recall curve |
-| `is_closed` | `bool\|None` | `None` | LLMmap cross-classification: force closed-set (vs open-set) dataset construction |
-| `train_size_dict_2_checkpoint_path` | `str\|None` | `None` | DCA "compare mode": second checkpoint to overlay against the main curve |
-| `train_size_dict_map` | `dict[str,str]\|None` | `None` | "Merged-wrapper mode": load named per-source checkpoints for F01 comparison figure |
-
-```yaml
-classification_config:
-  n_splits: 10
-  test_size: 64
-  # force_class_size omitted -> "auto" (balance to the smallest class). Set an explicit
-  # int (must be > test_size) only to cap classes below the data size, e.g. for speed.
-  batch_prediction_sizes: [1,2,3,4,5,6,7,8]
-  # classifiers / splitter_type / default_normalization / normalization_methods / batch_types
-  # all omitted -> auto-applied defaults. Override any of them here when needed, e.g.:
-  classifiers: [XGBoost, Random Forest]
-  batch_types: [tp_wise]            # force a single mode instead of the derived pair
-```
-
----
-
-## `FigureConfig`
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `name` | `str\|None` | `None` | Figure title |
-| `type` | `str` | `"lineplot"` | Plot type: `barplot`, `lineplot` |
-| `x_axis` | `str` | `""` | X-axis variable (YAML key: `x-axis`) |
-| `y_axis` | `str` | `"metric"` | Y-axis variable (YAML key: `y-axis`) |
-| `metrics` | `list[str]` | `[]` | Metrics to plot |
-| `group_by` | `str` | `"none"` | Grouping |
-| `aggregation` | `str` | `"mean"` | Aggregation function |
-| `error_bar` | `str` | `"std"` | Error bar type |
-| `repeat_for_each` | `str` | `"none"` | Generate separate figure per value of this iterator |
-
-Hyphenated YAML keys `x-axis` and `y-axis` are remapped to `x_axis` and `y_axis`.
-
----
-
-## Variation selection: `scenario` vs `model_variations`
-
-There are **two interchangeable ways** to declare which model × variation cells become
-classification classes, and **both ship by design**:
-
-- **`scenario:`** — a declarative `config/scenarios/*.yaml` file expanded by `build_instances`
-  (the forward, single-source path).
-- **`model_variations` + `quantized_model_variations` + `abliterated_models`** — the direct
-  grid keys. **The shipped configs currently use these**; they are not deprecated.
-
-The two paths are held to the *identical* label set by `make gate-b-parity` (a data-free firewall
-run on every clone), so they cannot silently diverge. The collapse to a scenario-only path is a
-deliberate, **gated** manual release step (it requires accuracy-verifying the new path against the
-HPC-only headline export) — not something to do per-config. Full rationale:
-[`../reproduction/legacy-paths.md`](../reproduction/legacy-paths.md).
-
-```yaml
-# Single variation group
-model_variations:
-  temperature: [0.4, 0.6, 0.8, 1.0]
-  system_prompt_idx: [-1]
-
-# Multiple variation groups (list)
-model_variations:
-  - {temperature: [0.4, 0.6, 0.8, 1.0], system_prompt_idx: [-1]}
-  - {temperature: [1.0], system_prompt_idx: [0, 3, 6, 7]}
-```
-
----
-
-## `calculations`
-
-Defines iteration axes. Empty or absent = no explicit iteration axis.
-
-```yaml
-calculations:
-  token_pairs: token_pairs    # iterate over all token pairs
-```
-
-Supported iterator names: `token_pairs`, `models`, `features`, or any sampling parameter column.
-
----
-
-## `model_groups`
-
-Group-based classification: models are grouped into named categories; the classifier predicts the
-category. Models not listed in any group are excluded.
-
-```yaml
-# Hardcoded groups
-model_groups:
-  abliterated:
-    - failspy/Meta-Llama-3-8B-Instruct-abliterated-v3
-  non-abliterated:
-    - meta-llama/Llama-3.1-8B-Instruct
-
-# Parameter-based groups
-model_groups:
-  group_by: temperature   # one group per temperature value
-```
-
-Supported `group_by` values: `temperature`, `system_prompt_idx`, `abliteration`.
-
----
-
-## Config organization on disk
+## Configuration on disk
 
 ```
 XP_configs/
-  +-- run_experiments.py          # CLI dispatcher
-  +-- XP_script_global.py        # Per-experiment entry point
-  +-- Final_FLiPS_ICML/          # Production ICML experiments
-  +-- LLMmap/                    # LLMmap-specific experiments
-  +-- e3_flips_vs_llmmap/        # E3 comparison (3-curve merge wrapper)
-  +-- e3_llmmap_baseline/        # Out-of-box LLMmap-only E3 curve
-  +-- Smoke_light/               # Light-subset smoke test config
-  +-- XP_config_libs/            # Shared config fragments (excluded from discovery)
-  +-- Old_configs/               # Legacy configs (excluded from discovery)
+  closed_set.yaml  open_set.yaml  smoke.yaml  smoke_open_set.yaml     the shipped experiments
+  example_custom/example_custom.yaml                                  template with a scenario
+config/
+  scenarios/main.yaml  scenarios/example_custom.yaml  scenarios/README.md
+  models.yaml                                                         model registry read by the scenario loader
 ```
 
----
+Experiment configs live under `XP_configs/` and are run with `python -m audit_llm.pipeline run --config <file>` ([`experiment.md`](experiment.md)). `tests/test_experiment_config_schema.py` validates every
+YAML file found under `XP_configs/`. Scenario files live in `config/scenarios/` and are referenced by name from the
+`scenario` key.
 
 ## Related documentation
 
-| File | Content |
-|------|---------|
-| [configuration.md](configuration.md) | Simple config guide — the common fields only |
-| [classification.md](classification.md) | Classification pipeline internals |
-| [features.md](features.md) | Feature preset names (`SmallNist`, etc.) |
-| [quantized-models.md](quantized-models.md) | `include_quantized` field details |
-| [experiment.md](experiment.md) | How configs are discovered, validated, and dispatched |
-</content>
+[`../README.md`](../README.md) · [`overview.md`](overview.md) · [`configuration.md`](configuration.md) ·
+[`experiment.md`](experiment.md) · [`classification.md`](classification.md) · [`scenarios.md`](scenarios.md) ·
+[`../reproduction/custom-scenario.md`](../reproduction/custom-scenario.md)

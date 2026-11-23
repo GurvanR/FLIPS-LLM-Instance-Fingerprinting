@@ -1,0 +1,42 @@
+{
+ "token_pair": "ali-yg",
+ "split": 0,
+ "draw": 0,
+ "n_splits": 2,
+ "test_per_class": 40,
+ "batch_sizes": [
+  1,
+  2,
+  4,
+  8
+ ],
+ "params": {
+  "n_train": 100,
+  "inner_val": 10,
+  "n_unseen": 3,
+  "min_rows_per_instance": 60,
+  "global_rounds": 100,
+  "round_max": 100,
+  "round_patience": 60,
+  "n_jobs": 4
+ },
+ "metrics": {
+  "1": {
+   "accuracy": 0.29204545454545455,
+   "unseen_recall": 0.04838709677419355
+  },
+  "2": {
+   "accuracy": 0.35648148148148145,
+   "unseen_recall": 0.0
+  },
+  "4": {
+   "accuracy": 0.44711538461538464,
+   "unseen_recall": 0.034482758620689655
+  },
+  "8": {
+   "accuracy": 0.5098039215686274,
+   "unseen_recall": 0.0
+  }
+ },
+ "note": "Open-set reference of the fixture: one cell, scaled-down constants (fewer training rows, boosting rounds and round-selection cap, min_rows_per_instance 60); the other constants are the paper's."
+}

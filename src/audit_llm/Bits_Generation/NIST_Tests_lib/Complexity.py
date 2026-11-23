@@ -29,14 +29,16 @@ class ComplexityTest:
         length_of_binary_data = len(binary_data)
 
         # The number of degrees of freedom;
-        # K = 6 has been hard coded into the test.
+        # K = 6 is fixed by the test.
         degree_of_freedom = 6
 
         #  π0 = 0.010417, π1 = 0.03125, π2 = 0.125, π3 = 0.5, π4 = 0.25, π5 = 0.0625, π6 = 0.020833
         #  are the probabilities computed by the equations in Section 3.10
         pi = [0.01047, 0.03125, 0.125, 0.5, 0.25, 0.0625, 0.020833]
 
-        block_size= 20 # hard-coded change to test data
+        # Blocks of 20 bits (SP 800-22 recommends 500 to 5000): the LLM answers are a few hundred bits long, so
+        # 20-bit blocks give several blocks per sequence. The block_size argument is overridden.
+        block_size= 20
         t2 = (block_size / 3.0 + 2.0 / 9) / 2**block_size
         mean = 0.5 * block_size + (1.0 / 36) * (9 + (-1) ** (block_size + 1)) - t2
 

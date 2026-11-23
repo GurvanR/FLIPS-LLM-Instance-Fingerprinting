@@ -1,39 +1,15 @@
-"""Classification — ML classification pipeline for LLM audit.
+"""Classification: the instance classifier and the Unseen detector.
 
-Public API re-exports for clean imports::
-
-    from audit_llm.Classification import classify, SingleTokenPairClassification, ...
+- ``protocol``: rows, splits, training draws and verification samples of a (token pair, split) cell;
+- ``imputation``: a missing value is replaced by the mean of its column over the drawn training rows;
+- ``xgb``: the XGBoost classifiers (frozen boosting rounds, round selection, exact log-probabilities);
+- ``log_sum_aggregation``: log-sum aggregation of the queries of a verification sample;
+- ``hierarchical``: global classifier + per-LLM classifiers;
+- ``unseen_detector``: the open-set Unseen detector (held-out instances, statistics, logistic regression, threshold).
 """
 
-from audit_llm.Classification.classify_batch import batch_classification_across_token_pairs
-from audit_llm.Classification.classify_cross import classify_cross_token_pairs
-from audit_llm.Classification.classify_single import classify
-from audit_llm.Classification.Feature_Visualization import (
-    Nist_perf_chart,
-    Save_pv_in_parquet,
-    Seq_Length_visualization,
-    Valid_count_chart,
-)
-from audit_llm.Classification.multi_classification import MultiTokenPairClassification
-from audit_llm.Classification.openset_classification import OpenSetClassification
-from audit_llm.Classification.Preprocessing_data import FeatureNormalizer, fit_transform_normalize
-from audit_llm.Classification.single_classification import SingleTokenPairClassification
+from audit_llm.Classification.hierarchical import HierarchicalClassifier, llm_blocks, llm_name
+from audit_llm.Classification.imputation import TrainingMeanImputer
+from audit_llm.Classification.log_sum_aggregation import LOG_FLOOR, log_sum_predict, log_sum_scores
 
-__all__ = [
-    # Orchestration entry points
-    "batch_classification_across_token_pairs",
-    "classify",
-    "classify_cross_token_pairs",
-    # Classification classes
-    "SingleTokenPairClassification",
-    "MultiTokenPairClassification",
-    "OpenSetClassification",
-    # Preprocessing
-    "FeatureNormalizer",
-    "fit_transform_normalize",
-    # Feature visualization
-    "Nist_perf_chart",
-    "Save_pv_in_parquet",
-    "Seq_Length_visualization",
-    "Valid_count_chart",
-]
+__all__ = ["HierarchicalClassifier", "llm_blocks", "llm_name", "TrainingMeanImputer", "LOG_FLOOR", "log_sum_predict", "log_sum_scores"]

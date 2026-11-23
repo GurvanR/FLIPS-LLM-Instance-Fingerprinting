@@ -7,10 +7,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 from audit_llm.path_utils import get_repository_level_path
-from audit_llm.Tokens_analysis.token_decoding import (
-    token_decoder,
-    universalize_token_vocab,
-)
+from audit_llm.Tokens_analysis.token_decoding import universalize_token_vocab
 from audit_llm.Tokens_analysis.vocab_io import load_tokenizer_vocabs
 
 

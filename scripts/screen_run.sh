@@ -1,32 +1,25 @@
 #!/usr/bin/env bash
-# Re-launch a `make` goal detached in a GNU screen session, optionally after a delay.
+# Run a long command detached in a GNU screen session, optionally after a delay.
 #
-# Invoked by the Makefile when SCREEN= and/or DELAY= are set on a long-running target
-# (the data-gated repro-* targets and repro-headline). The re-entered child runs with
-# FLIPS_IN_SCREEN=1 exported, so the SAME goal takes its real recipe branch instead of
-# re-launching — that env var is the recursion guard, no infinite loop.
+# A foreground job dies if the remote terminal drops; a screen session survives
+# disconnects. The optional delay queues a deferred start (e.g. off-peak) and returns
+# immediately: the sleep runs INSIDE the screen, not in your terminal. The environment
+# (PATH / VIRTUAL_ENV) is inherited, so the command resolves the same interpreter.
 #
-# Why: on an HPC login/sandbox node a foreground `make` dies if the SSH/Jupyter terminal
-# drops. Detaching reparents it to a session that survives disconnects. The optional delay
-# lets you queue a deferred start (e.g. begin off-peak) and detach immediately — the sleep
-# runs INSIDE the screen, not in your terminal.
-#
-# Environment (PATH / VIRTUAL_ENV, i.e. the poetry venv) is inherited through screen into
-# a non-login `bash -c`, so the re-entered `make` resolves the same interpreter as the
-# parent `poetry run make ...` — no `poetry run` needed inside the screen.
-#
-# Usage: scripts/screen_run.sh <goal> <screen-name-or-flag> <delay-hours> <cmd...>
-#   <goal>                 make target name (default session name)
-#   <screen-name-or-flag>  session name; ''/1/yes/true/on -> use <goal>
+# Usage: scripts/screen_run.sh <name> <screen-name-or-flag> <delay-hours> <cmd...>
+#   <name>                 default session name
+#   <screen-name-or-flag>  session name; ''/1/yes/true/on -> use <name>
 #   <delay-hours>          hours to sleep inside the screen before running (0, decimals ok)
-#   <cmd...>               the command to run, e.g. `make repro-closedset SCREEN= DELAY=0`
+#   <cmd...>               the command to run, e.g. `python scripts/Run_Inferences.py ...`
+#
+# Log: Productions/_screenlogs/<session>.log
 set -euo pipefail
 
 goal="$1"; screenval="$2"; delay_h="$3"; shift 3
 
 command -v screen >/dev/null 2>&1 || {
 	echo ">>> [screen] GNU screen is not installed on this node." >&2
-	echo ">>>   Install it, or rerun the target without SCREEN=/DELAY= (foreground)." >&2
+	echo ">>>   Install it, or run the command in the foreground." >&2
 	exit 127
 }
 
@@ -36,10 +29,10 @@ case "$screenval" in
 esac
 
 # Reject a duplicate live session name — screen would silently start a 2nd one, and you
-# would not know which log is which. Make the operator pick a name or wipe the old one.
+# would not know which log is which.
 if screen -ls 2>/dev/null | grep -qE "[._]${sess}[[:space:]]"; then
 	echo ">>> [screen] a session named '${sess}' already exists (screen -ls):" >&2
-	echo ">>>   reuse a different SCREEN=<name>, or kill it: screen -S ${sess} -X quit" >&2
+	echo ">>>   pick a different name, or kill it: screen -S ${sess} -X quit" >&2
 	exit 1
 fi
 
@@ -51,9 +44,9 @@ mkdir -p "$logdir"
 log="$logdir/$sess.log"
 
 # Build the command that runs INSIDE the screen. The whole thing is grouped so sleep +
-# banners + the real `make` all tee to the log. \$(date) is escaped to evaluate at run
-# time inside the screen (so the "woke at ..." stamp is the real start time, not now).
-body="export FLIPS_IN_SCREEN=1; echo \"[screen] queued at \$(date) (session=${sess})\";"
+# banners + the command all tee to the log. \$(date) is escaped to evaluate at run
+# time inside the screen (so the "woke at ..." stamp is the real start time, not the queuing time).
+body="echo \"[screen] queued at \$(date) (session=${sess})\";"
 if [ "$delay_s" -gt 0 ]; then
 	body="${body} echo \"[screen] sleeping ${delay_h}h (${delay_s}s) before start\"; sleep ${delay_s};"
 	body="${body} echo \"[screen] woke at \$(date) -- starting\";"

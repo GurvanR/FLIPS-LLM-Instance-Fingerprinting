@@ -4,12 +4,15 @@
 
 [tool.poetry]
 name = "flips"
-version = "0.1"
-description = "FLIPS: Instance-Fingerprinting for LLMs via Pseudo-random Sequences — reproducibility package (ICML 2026). Importable as `audit_llm` for historical compatibility."
+version = "2.0.0"
+description = "FLIPS: Instance-Fingerprinting for LLMs via Pseudo-random Sequences. Code and data of the paper. The importable package is `audit_llm`."
+readme = "README.md"
 authors = ["Pôle d'Expertise de la Régulation Numérique <contact@peren.gouv.fr>"]
 license = "MIT"
-# The distribution is named `flips`, but the importable package remains `audit_llm`
-# for historical compatibility (existing imports, cached artifacts, and configs).
+repository = "https://github.com/GurvanR/FLIPS-LLM-Instance-Fingerprinting"
+keywords = ["LLM", "fingerprinting", "instance identification", "random sequences", "NIST statistical tests"]
+# The distribution is named `flips`; the importable package is `audit_llm`.
+# The chat templates under LLM_Classes/chat_templates/ are package data (tracked, hence included in the wheel).
 packages = [
     { include = "audit_llm", from = "src" },
 ]
@@ -17,35 +20,35 @@ packages = [
 [tool.poetry.dependencies]
 python = "^3.11"
 numpy = "^2.4.2"
+scipy = "^1.17.0"
 pandas = "^3.0.0"
 polars = "^1.38.1"
-scipy = "^1.17.0"
+# The statistics, the XGBoost fits and the Unseen detector are numerics-sensitive: the paper's results were
+# computed with scikit-learn 1.8 and xgboost 3.2 (xgboost's `hist` method also depends on the thread count,
+# see docs/reproduction/recompute.md).
 scikit-learn = "^1.8.0"
-joblib = "^1.5.3"
-packaging = "^26.0"
-pyyaml = "^6.0.3"
-tqdm = "^4.67.3"
-overrides = "^7.7.0"
-matplotlib = "^3.9"
-seaborn = "^0.13"
-Pillow = "^11.0"
-networkx = "^3.4"
-xgboost = "^3.0"
-umap-learn = "^0.5"
+xgboost = "~3.2"
 pyarrow = ">=10.0"
-
-# GPU / generation (optional – install with: poetry install --extras generation)
-torch = { version = "^2.5", optional = true }
-transformers = { version = "^4.47", optional = true }
-huggingface-hub = { version = "^0.27", optional = true }
-openai = { version = "^1.60", optional = true }
+pyyaml = "^6.0.3"
 pydantic = "^2.10"
-pydantic-settings = "^2.7"
-click = "^8.1"
-ipywidgets = "^8.1.8"
+tqdm = "^4.67.3"
+matplotlib = "^3.9"
+packaging = "^26.0"
+overrides = "^7.7.0"
+
+# Faster feature statistics (same arithmetic, compiled): poetry install --extras speed
+numba = { version = ">=0.60", optional = true, python = "<3.15" }
+
+# GPU generation (optional): poetry install --extras generation. vLLM is installed separately,
+# against the CUDA / torch build of the machine (docs/reproduction/generation.md).
+torch = { version = ">=2.5", optional = true }
+transformers = { version = ">=4.47", optional = true }
+huggingface-hub = { version = ">=0.27", optional = true }
+jinja2 = { version = "^3.1", optional = true }
 
 [tool.poetry.extras]
-generation = ["torch", "transformers", "huggingface-hub", "openai"]
+speed = ["numba"]
+generation = ["torch", "transformers", "huggingface-hub", "jinja2"]
 
 [tool.poetry.group.dev.dependencies]
 flake8 = "^7.2"
@@ -69,8 +72,8 @@ line-length = 120
 [tool.licensecheck]
 format = "ansi"
 zero = true
-# TODO[squelette]: Whitelist packages which have been reviewed and do not come with a license or
-# that are incorrectly flagged as incompatible.
+# Packages that have been reviewed and do not come with a license, or that are incorrectly flagged as
+# incompatible.
 ignore_packages = [
     "pylint",  # GPL but used as an external tool (not imported)
     "reuse",  # Used as an external tool
@@ -112,12 +115,9 @@ disable = [
 ]
 
 [tool.pytest.ini_options]
-log_cli = true
-log_cli_level = "DEBUG"
-log_cli_format = "%(asctime)s,%(msecs)03d:%(name)s:%(levelname)s:%(filename)s@%(lineno)s:%(message)s"
-log_cli_date_format = "%F|%T"
+testpaths = ["tests"]
 markers = [
-    "requires_data: test requires a downloaded Zenodo archive; skip when the data is absent",
+    "requires_data: test needs the results archive unpacked under $FLIPS_DATA (default data/); skipped when it is absent",
 ]
 
 [tool.coverage.run]
@@ -137,7 +137,7 @@ exclude_also = [
 
 [tool.pyright]
 # ref: https://github.com/microsoft/pyright/blob/main/docs/configuration.md
-# TODO[squelette]: Uncomment the following line to activate strict type checking (recommended)
+# Uncomment the following line to activate strict type checking
 # typeCheckingMode = "strict"
 
 [tool.isort]

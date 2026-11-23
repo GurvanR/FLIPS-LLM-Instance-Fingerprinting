@@ -6,14 +6,12 @@
 
 ``load_scenario(path)`` reads ``config/scenarios/<name>.yaml``, builds a typed
 :class:`~audit_llm.scenarios.schema.Scenario`, and validates every model
-selection against the ``config/models.yaml`` registry (the model-universe SSOT
-produced upstream). Any unknown base model, undeclared
+selection against the ``config/models.yaml`` registry (the model universe). Any unknown base model, undeclared
 ``(quantized_base, quantization)`` pair, or unknown abliteration target raises a
 clear :class:`ValueError` naming the offender and the registry path.
 
-The loader reads/validates only. It never emits or rewrites any prompt-request
-CSV — the scenario layer governs model × variation selection only (see
-``config/scenarios/README.md`` for the CSV invariant).
+The loader reads and validates; the scenario layer governs model × variation
+selection (see ``config/scenarios/README.md`` for the request files).
 """
 
 from __future__ import annotations
@@ -31,8 +29,8 @@ _ROOT = Path(__file__).resolve().parents[3]
 _REGISTRY_PATH = _ROOT / "config" / "models.yaml"
 _SCENARIOS_DIR = _ROOT / "config" / "scenarios"
 
-# Abliteration is pinned to the paper default; no released data exists for any
-# other abliterated cell, so the loader rejects abliteration crossings.
+# Abliteration is pinned to the paper default (the paper's generations hold no other abliterated cell),
+# so the loader rejects abliteration crossings.
 _ABLITERATION_PIN_TEMPERATURE = 1.0
 _ABLITERATION_PIN_SYSTEM_PROMPT_IDX = -1
 
@@ -179,7 +177,7 @@ def _validate(scenario: Scenario, registry: _Registry, registry_path: Path) -> N
 def _validate_abliteration_pin(scenario: Scenario) -> None:
     """Reject any abliteration cell outside the temp=1.0 / sp=-1 pin.
 
-    No released data exists for abliterated cells other than the paper default,
+    The paper's generations hold no abliterated cell other than the default,
     so abliteration must never be crossed over temperature / system_prompt_idx
     (or over quantization / abliteration axes).
     """
@@ -190,8 +188,8 @@ def _validate_abliteration_pin(scenario: Scenario) -> None:
             raise ValueError(
                 f"abliteration_variations group #{i} crosses outside the pinned "
                 f"cell (temperature={_ABLITERATION_PIN_TEMPERATURE}, "
-                f"system_prompt_idx={_ABLITERATION_PIN_SYSTEM_PROMPT_IDX}): no "
-                f"released data exists for other abliterated cells. Got "
+                f"system_prompt_idx={_ABLITERATION_PIN_SYSTEM_PROMPT_IDX}): the "
+                f"paper's generations hold no other abliterated cell. Got "
                 f"temperature={list(group.temperature)}, "
                 f"system_prompt_idx={list(group.system_prompt_idx)}, "
                 f"quantization={list(group.quantization)}, "

@@ -1,0 +1,30 @@
+{
+ "classes": 237,
+ "n_batches": 141425,
+ "n_errors": 33007,
+ "accuracy": 0.7666,
+ "error_rate": 0.2334,
+ "attributes": {
+  "model": {
+   "same_value_share_pooled": 0.9483,
+   "chance_same_value_pooled": 0.0403
+  },
+  "quant": {
+   "same_value_share_pooled": 0.7999,
+   "chance_same_value_pooled": 0.754
+  },
+  "T": {
+   "same_value_share_pooled": 0.8797,
+   "chance_same_value_pooled": 0.5771
+  },
+  "SP": {
+   "same_value_share_pooled": 0.2802,
+   "chance_same_value_pooled": 0.2431
+  }
+ },
+ "_build": {
+  "nr": 300,
+  "nt": 32,
+  "note": "closed set, N_t 32, errors only (stored confusion); same_value_share_pooled = share of all errors that keep the true value of the attribute; chance_same_value_pooled = the same share if each error went to a uniformly drawn wrong instance (error-weighted)"
+ }
+}

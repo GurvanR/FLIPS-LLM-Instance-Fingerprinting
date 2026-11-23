@@ -20,11 +20,12 @@ class Matrix:
 
         :param      binary_data         The seuqnce of bit being tested
         :param      verbose             True to display the debug messgae, False to turn off debug message
-        :param      rows_in_matrix      Fixed for 32
-        :param      columns_in_matrix   Fixed for 32
+        :param      rows_in_matrix      set to 8 below
+        :param      columns_in_matrix   set to 8 below
         :return     (p_value, bool)     A tuple which contain the p_value and result of frequency_test(True or False)
         """
-        # HARDCODED change for LLM context testing
+        # Matrices of 8 x 8 bits (64-bit blocks) rather than the 32 x 32 of SP 800-22: the LLM answers are a few
+        # hundred bits long, so 64-bit blocks give several matrices per sequence. The arguments are overridden.
         rows_in_matrix=8
         columns_in_matrix=8
         

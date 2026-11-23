@@ -1,0 +1,115 @@
+{
+ "description": "Unseen test batches of the method, 155 cells: attribute distance of the class decision (taken regardless of the detector flag) to the Unseen source; (i) d = 1 share vs uniform-Known expectation, (ii) differing attribute, (iii) flagged share at the 50 %-target cut by d.",
+ "attribute_parser": "paper/dataio.py attrs(name) -> (model, quant, T, SP); quant '-' = none; abliterated checkpoint = distinct base LLM",
+ "nt32": {
+  "n_unseen_batches": 13625,
+  "n_cells": 155,
+  "n_pairs": 31,
+  "i_distance1": {
+   "observed": 0.9092,
+   "expected_uniform_known": 0.1141,
+   "observed_minus_expected": 0.7952,
+   "ci95": {
+    "observed": [
+     0.9016,
+     0.9174
+    ],
+    "expected": [
+     0.114,
+     0.1141
+    ],
+    "observed_minus_expected": [
+     0.7876,
+     0.8034
+    ]
+   },
+   "distance_distribution": {
+    "1": {
+     "observed": 0.9092,
+     "expected": 0.1141
+    },
+    "2": {
+     "observed": 0.0799,
+     "expected": 0.4311
+    },
+    "3": {
+     "observed": 0.0098,
+     "expected": 0.3893
+    },
+    "4": {
+     "observed": 0.0011,
+     "expected": 0.0656
+    }
+   }
+  },
+  "ii_attribute_at_distance1": {
+   "n_batches_d1": 12388,
+   "observed_share": {
+    "base LLM": 0.0195,
+    "quantisation": 0.0994,
+    "temperature": 0.3056,
+    "system prompt": 0.5755
+   },
+   "expected_share_uniform": {
+    "base LLM": 0.846,
+    "quantisation": 0.0117,
+    "temperature": 0.0477,
+    "system prompt": 0.0946
+   },
+   "observed_over_unseen_batches": {
+    "base LLM": 0.0178,
+    "quantisation": 0.0903,
+    "temperature": 0.2779,
+    "system prompt": 0.5232
+   }
+  },
+  "iii_flagged_c50": {
+   "d1": 0.3888,
+   "d_ge2": 0.6346,
+   "d1_minus_dge2": -0.2458,
+   "ci95": {
+    "d1": [
+     0.3773,
+     0.4003
+    ],
+    "d_ge2": [
+     0.5912,
+     0.6732
+    ],
+    "d1_minus_dge2": [
+     -0.2846,
+     -0.2005
+    ]
+   },
+   "overall": 0.4112
+  },
+  "iii_flagged_c50_by_attribute": {
+   "base LLM": {
+    "n": 242,
+    "flagged": 0.7231
+   },
+   "quantisation": {
+    "n": 1231,
+    "flagged": 0.2786
+   },
+   "temperature": {
+    "n": 3786,
+    "flagged": 0.5716
+   },
+   "system prompt": {
+    "n": 7129,
+    "flagged": 0.2995
+   }
+  }
+ },
+ "notes": {
+  "nt32_base_llm_d1_involving_abliterated": 96,
+  "known_per_cell": 214,
+  "unseen_per_cell": 23,
+  "operating_point": "flag = stored s_test >= stored tau50 (pre-test 50 %-target cut)",
+  "weighting": "every Unseen test batch weight 1, pooled over the 155 cells; CIs resample the 31 token pairs"
+ },
+ "sources": {
+  "nt32": "results/open_set/per_instance/test_rows.npz: class decision `pred`, test scores `s` and pre-test cut `tau50` of every cell (N_t 32)"
+ }
+}

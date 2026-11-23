@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: 2026 Pôle d'Expertise de la Régulation Numérique <contact@peren.gouv.fr>
+#
+# SPDX-License-Identifier: MIT
+#
+# Closed set: hierarchical instance classifier on every token pair, 5 splits (the paper's protocol).
+#   python -m audit_llm.pipeline run --config XP_configs/closed_set.yaml --grid <grid dir> --out results/closed_set
+# Cost: 155 cells (31 pairs x 5 splits), about 80 core-hours on a 24-core machine (about 1 800 core-seconds per cell;
+# about 4 h wall with n_workers: 6 and 4 threads each). Memory: about 5 GB per worker plus about 12 GB for the parent
+# process. Bitwise identical results need xgboost 3.2 and 4 threads.
+experiment_fun: closed_set
+scenario: main             # the 237 instances of the paper (config/scenarios/main.yaml)
+token_pairs: []            # [] = all token pairs of the grid
+min_seq_length: 100
+batch_sizes: [1, 2, 4, 8, 16, 32, 64]   # N_t
+protocol:
+  splits: [0, 1, 2, 3, 4]
+  test_per_class: 128
+  inner_val: 40            # validation sequences set aside per instance before the draw
+  n_train: 300             # N_r, training sequences per instance
+  seed: 0
+classifier:
+  global_rounds: 357       # boosting rounds of the global classifier, frozen on validation sequences
+  n_jobs: 4
+  round_selection_patience: 60
+  round_selection_max: 1000
+n_workers: 1               # cells run in parallel (each global classifier uses classifier.n_jobs threads; about 5 GB of memory per worker)

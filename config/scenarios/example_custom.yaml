@@ -5,25 +5,25 @@
 # example_custom — a minimal, runnable "build your own scenario" template.
 #
 # It SELECTS a 4-class subset (2 base models × 2 temperatures) from the data
-# already shipped in Productions/FLiPS_ICML_light_subset/, so it runs on CPU with
+# in the in-repo test fixture (tests/fixtures/answers.parquet), so it runs on CPU with
 # zero download. Copy this file to config/scenarios/<your_name>.yaml and edit the
 # model list / variation grid to define your own scenario.
 #
 #   End-to-end walkthrough : docs/reproduction/custom-scenario.md
 #   Field contract (axes, cartesian-within-a-group / union-across-groups,
-#   validation rules, the CSV invariant) : config/scenarios/README.md
+#   validation rules, the request files) : config/scenarios/README.md
 #   A fully-populated example (the 237-instance paper default) : main.yaml
 #
 # Two rules the loader enforces:
 #   1. every base model MUST exist in config/models.yaml `base_models`;
 #   2. every (model, temperature, system_prompt_idx) cell you select MUST have
 #      been generated — otherwise that class has no data. Here we select the two
-#      registered models present in the committed light subset, at temperatures
-#      0.4 and 1.0, with no system prompt (sp=-1).
+#      registered models present in the test fixture, at temperatures
+#      0.6 and 1.0, with no system prompt (sp=-1).
 
 name: example_custom
 
-# Two registered base models that are present in the committed light subset.
+# Two registered base models that are present in the test fixture.
 base_models:
   - CohereForAI/c4ai-command-r-plus
   - google/gemma-2-9b-it
@@ -31,7 +31,7 @@ base_models:
 # One group → 2 temperatures × 1 system-prompt cell = 2 variations per model.
 # 2 base models × 2 variations = 4 classification classes.
 base_variations:
-  - {temperature: [0.4, 1.0], system_prompt_idx: [-1]}
+  - {temperature: [0.6, 1.0], system_prompt_idx: [-1]}
 
 # This template selects base models only. To grow your own scenario with
 # quantized or abliterated instances, add the sibling sections (see main.yaml for

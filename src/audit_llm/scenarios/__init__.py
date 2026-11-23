@@ -8,7 +8,7 @@ A *scenario* (``config/scenarios/<name>.yaml``) selects which model × variation
 instances the analysis layer materialises, over four axes — ``temperature``,
 ``system_prompt_idx``, ``quantization``, ``abliteration`` — with
 cartesian-within-group / union-across-groups semantics. See
-``config/scenarios/README.md`` for the YAML contract and the CSV invariant.
+``config/scenarios/README.md`` for the YAML contract and the request files.
 """
 
 from audit_llm.scenarios.schema import AXES, Scenario, VariationGroup

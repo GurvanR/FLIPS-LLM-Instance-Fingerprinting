@@ -1,4 +1,4 @@
-"""vLLM backend for LLM auditing — the only active inference backend."""
+"""vLLM inference backend for LLM auditing."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from overrides import overrides
 from audit_llm.Bits_Generation.parsing_bits_tools import (
     validate_seq,
 )
+from audit_llm.LLM_Classes.chat_rendering import prompt_token_ids, stop_token_ids
 from audit_llm.LLM_Classes.General_LLM_Class import (
     LLM_for_audit,
     LLM_Generation,
@@ -21,7 +22,7 @@ from audit_llm.LLM_Classes.run_config import RunConfigDict
 from audit_llm.system_utils import vllm_version_import_manager
 
 
-# Force spawn method (redundant with env var but safer)
+# Force the spawn start method (vLLM workers; see also VLLM_WORKER_MULTIPROC_METHOD in scripts/run_large_LLMs.slurm)
 if multiprocessing.get_start_method(allow_none=True) != "spawn":
     multiprocessing.set_start_method("spawn", force=True)
 
@@ -58,7 +59,7 @@ class vLLM(LLM_for_audit):
 
         from vllm import LLM  # pylint: disable=import-outside-toplevel
 
-        # Version-dependent key name for max context
+        # Name of the engine argument holding the context length to capture
         max_context = vllm_version_import_manager("max_context")
         default_model_config = {
             "dtype": "bfloat16",
@@ -93,13 +94,23 @@ class vLLM(LLM_for_audit):
     def _generate(self, sampling_key: dict) -> None:  # type: ignore[override]
         """Generate outputs using vLLM with dynamic batching and retries."""
         from vllm import SamplingParams  # pylint: disable=import-outside-toplevel
-        if not isinstance(self.generations[0], LLM_Generation):
-            raise NotImplementedError("Not implemented in vLLM class.")
 
         sampling_params = {
             **self.sampling_config_completed,
             **sampling_key,
         }
+        # End generations at the model's end of turn (chat_templates/stop_token_ids.json).
+        model_stop_ids = stop_token_ids(self.model_name)
+        if model_stop_ids:
+            sampling_params["stop_token_ids"] = model_stop_ids
+        # Prompts are sent as token ids of the rendered text, without added special tokens.
+        vllm_tokenizer = self.llm.get_tokenizer()
+        logger.info(
+            "model=%s stop_token_ids=%s tokenizer_eos=%s",
+            self.model_name,
+            model_stop_ids,
+            getattr(vllm_tokenizer, "eos_token_id", None),
+        )
         gen_remaining = [gen for gen in self.generations if (not gen.success and not gen.fail)]
         total_gen_remaining = len(gen_remaining)
         current_index = 0
@@ -118,16 +129,17 @@ class vLLM(LLM_for_audit):
             if not buffer:
                 break
 
-            formatted_prompts_of_batch: list[str] = [llm_gen.formatted_prompt for llm_gen in buffer]
+            prompts_of_batch: list[dict[str, list[int]]] = [
+                {"prompt_token_ids": prompt_token_ids(vllm_tokenizer, llm_gen.formatted_prompt)} for llm_gen in buffer
+            ]
 
-            batch_outputs = self.llm.generate(formatted_prompts_of_batch, SamplingParams(**sampling_params))
+            batch_outputs = self.llm.generate(prompts_of_batch, SamplingParams(**sampling_params))
 
             for output, llm_gen in zip(batch_outputs, buffer):
                 is_valid = validate_seq(
                     llm_gen,
                     output,
                     min_seq_length=self.min_seq_length,
-                    mode="vllm",
                 )
                 llm_gen.increase_gen_counter(self.max_gen_counter, is_valid)
                 if is_valid:

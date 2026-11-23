@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: 2026 Pôle d'Expertise de la Régulation Numérique <contact@peren.gouv.fr>
+#
+# SPDX-License-Identifier: MIT
+#
+# Open set: 23 Unseen instances per draw, instance classifier + Unseen detector built from the training sequences
+# of the Known instances, 5 (split, draw) cells per token pair (the paper's protocol).
+#   python -m audit_llm.pipeline run --config XP_configs/open_set.yaml --grid <grid dir> --out results/open_set
+# Cost: dominated by the 10 held-out-fold classifiers of every cell, about 32 x 4 core-hours per draw over the
+# 31 token pairs (about 640 core-hours for the 5 draws). Bitwise identical results need xgboost 3.2 and 4 threads.
+experiment_fun: open_set
+scenario: main             # the 237 instances of the paper (config/scenarios/main.yaml)
+token_pairs: []
+min_seq_length: 100
+batch_sizes: [1, 2, 4, 8, 16, 32, 64]
+protocol:
+  test_per_class: 128
+  inner_val: 40
+  n_train: 300             # N_r, training sequences per Known instance
+  seed: 0
+classifier:
+  global_rounds: 357
+  n_jobs: 4
+  round_selection_patience: 60
+  round_selection_max: 1000
+open_set:
+  cells: [[0, 0], [1, 1], [2, 2], [0, 3], [3, 4]]   # (split, draw); draw d -> Unseen instances default_rng([4242, d])
+  n_unseen: 23
+  n_folds: 10                      # class folds of the Known instances (an LLM's instances spread over folds)
+  held_out_per_class: 40           # sequences set aside per instance of the other folds (simulated Known samples)
+  unseen_rows_per_instance: 40     # sequences of each instance of the fold (simulated Unseen samples)
+  known_batches_per_instance: 10
+  unseen_batches_per_instance: 40
+  min_rows_per_instance: 120
+  unseen_weight_share: 0.097       # weight of the simulated Unseen samples in the logistic regression
+  regularization_c: 0.1
+  target_recall: 0.5               # threshold: median of the out-of-fold scores of the simulated Unseen samples
+n_workers: 1               # cells run in parallel (about 5 GB of memory per worker)

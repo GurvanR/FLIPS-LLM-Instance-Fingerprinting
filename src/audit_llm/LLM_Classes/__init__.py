@@ -1,9 +1,7 @@
-"""LLM_Classes — LLM auditing backends, config, parsing, and analysis.
+"""LLM_Classes — the generation backend, its run configuration, and the parsing of the generations.
 
-Public API re-exports for convenience.
-Lazy-loaded to avoid importing GPU-dependent packages (torch, transformers,
-vllm) at package-load time.  This allows the post-processing environment
-to ``import audit_llm`` without those packages installed.
+Public API re-exports, loaded lazily so that ``import audit_llm`` does not import the GPU-dependent packages
+(torch, transformers, vllm) and works without the generation extras.
 """
 
 from typing import TYPE_CHECKING

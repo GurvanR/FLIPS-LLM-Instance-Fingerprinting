@@ -1,0 +1,36 @@
+{
+ "attributes": {
+  "model": {
+   "label": "base LLM",
+   "flips_miss": 0.0121,
+   "random_miss": 0.9576,
+   "ratio": 0.0126
+  },
+  "quant": {
+   "label": "quantization",
+   "flips_miss": 0.0467,
+   "random_miss": 0.2443,
+   "ratio": 0.1912
+  },
+  "T": {
+   "label": "temperature",
+   "flips_miss": 0.0281,
+   "random_miss": 0.5425,
+   "ratio": 0.0518
+  },
+  "SP": {
+   "label": "system prompt",
+   "flips_miss": 0.168,
+   "random_miss": 0.6736,
+   "ratio": 0.2494
+  }
+ },
+ "n_samples": 141425,
+ "n_instances": 237,
+ "nt": 32,
+ "note": "closed set, hierarchical instance classifier, N_t 32; flips_miss = share of all samples whose predicted instance has the wrong value of the attribute; random_miss = same share for a predicted instance drawn uniformly among the 237 instances (true one included); ratio = flips_miss / random_miss",
+ "source": {
+  "confusion": "results/closed_set/hierarchical/predictions.json (confusion[\"32\"])",
+  "script": "paper/figures/attribute_errors.py"
+ }
+}

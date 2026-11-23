@@ -12,7 +12,7 @@ forward slashes regardless of platform.
 
 The emitted path is ``<prefix>/<path-relative-to-root>`` so a member archive can
 be hashed at its real on-disk location while the manifest records the path it
-will occupy inside the repository (e.g. ``Productions/FLiPS_ICML_light_subset/...``).
+will occupy inside the repository (e.g. ``data/results/...``).
 
 This is the SAME script an external user re-runs after rebuilding an archive
 (see ``data/README.md``): point it at the unpacked run directory and paste the
@@ -20,13 +20,8 @@ hashes into ``data/manifest.sha256``.
 
 Examples
 --------
-# Hash the committed light subset, paths prefixed with its in-repo location:
-python scripts/gen_manifest.py Productions/FLiPS_ICML_light_subset \\
-    --prefix Productions/FLiPS_ICML_light_subset
-
-# Hash a canonical member that lives outside the repo, recording its in-repo path:
-python scripts/gen_manifest.py /abs/path/to/LLMmap_ICML_run \\
-    --prefix Productions/LLMmap_ICML_run
+# Hash the unpacked results archive, recording the paths it occupies in the repository:
+python scripts/gen_manifest.py /path/to/unpacked/results --prefix data/results
 """
 
 from __future__ import annotations

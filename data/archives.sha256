@@ -1,0 +1,9 @@
+# data/archives.sha256 - SHA-256 of each downloadable archive (sha256sum convention).
+#
+# SPDX-FileCopyrightText: 2026 Pôle d'Expertise de la Régulation Numérique <contact@peren.gouv.fr>
+# SPDX-License-Identifier: CC-BY-4.0
+#
+# scripts/fetch_data.py checks the downloaded archive against this list before unpacking it.
+#
+db1dfce36e2e62f3725bac6bc1500a45419d5bbbe031b87b32985c1a29a63e3c  flips_results.zip
+8cc61fca09e8b81237ba7ae8912cb2851c755983805e5f7bc45ce3b4f935a67f  flips_release_data.tar.gz

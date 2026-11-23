@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2026 Pôle d'Expertise de la Régulation Numérique <contact@peren.gouv.fr>
+#
+# SPDX-License-Identifier: MIT
+#
+# Smoke test of the closed-set pipeline on the in-repo fixture (tests/fixtures/answers.parquet: 22 instances,
+# 2 token pairs, 200 sequences each). Same method as closed_set.yaml; the protocol is scaled to the fixture.
+# This is the protocol of the reference-output test (tests/test_closed_set_reference.py).
+#   python -m audit_llm.pipeline run --config XP_configs/smoke.yaml --answers tests/fixtures/answers.parquet --out /tmp/flips_smoke
+experiment_fun: closed_set
+token_pairs: [ali-yg, df-bits]
+min_seq_length: 100
+batch_sizes: [1, 2, 4, 8]
+protocol:
+  splits: [0, 1]
+  test_per_class: 40
+  inner_val: 10
+  n_train: 100
+  seed: 0
+classifier:
+  global_rounds: 357
+  n_jobs: 4

@@ -2,20 +2,16 @@
 
 import json
 import logging
-import os
 from pathlib import Path
+
+from audit_llm.path_utils import get_repository_level_path
 
 logger = logging.getLogger(__name__)
 
-from audit_llm.path_utils import get_repository_level_path
-from audit_llm.config import path_config
-
 
 def save_tokenizer_vocab_from_model(model_name: str, model_path: Path) -> None:
-    """Save a HuggingFace tokenizer's vocabulary as JSON."""
+    """Save the vocabulary of the tokenizer at ``model_path`` (a local directory or a hub id) as JSON."""
     from transformers import AutoTokenizer
-
-    from audit_llm.LLM_Classes.model_tokenizer_map import model_tokenizer_map
 
     repo_path = get_repository_level_path()
     vocab_path = Path(repo_path) / "Productions" / "Tokenizer_Vocabs"
@@ -24,8 +20,8 @@ def save_tokenizer_vocab_from_model(model_name: str, model_path: Path) -> None:
     model_vocab_path.mkdir(parents=True, exist_ok=True)
     tokenizer_vocab_path = Path(model_vocab_path) / "vocab.json"
     if not tokenizer_vocab_path.exists():
-        tokenizer = model_tokenizer_map.get(model_name, AutoTokenizer).from_pretrained(
-            model_path, padding_side="left", device_map="auto", trust_remote_code=True, local_files_only=True
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_path, padding_side="left", device_map="auto", trust_remote_code=True
         )
 
         logger.info("tokenizer loaded!")
@@ -111,42 +107,3 @@ def load_tokenizer_vocabs(model_vocab_path: Path | None = None) -> dict[str, dic
             model_to_vocab[model_name] = vocab
 
     return model_to_vocab
-
-
-def get_models_by_tokenizer(grouped_vocab_path: Path | None = None) -> dict[str, list[str]]:
-    """Return {tokenizer_name: [model_names...]} from Grouped_Tokenizer_Vocabs."""
-    repo_path = get_repository_level_path()
-    grouped_root = (
-        Path(grouped_vocab_path) if grouped_vocab_path else Path(repo_path) / "Productions" / "Grouped_Tokenizer_Vocabs"
-    )
-    assert grouped_root.exists(), f"Grouped vocab root {grouped_root} does not exist"
-
-    tokenizer_to_models: dict[str, list[str]] = {}
-    for tokenizer_dir in grouped_root.iterdir():
-        for model_dir in tokenizer_dir.iterdir():
-
-            tokenizer_name = f"{tokenizer_dir.name}/{model_dir.name}"
-            models_file = tokenizer_dir / model_dir / "models.txt"
-            if models_file.exists():
-                with open(models_file, "r", encoding="utf-8") as f:
-                    models = [line.strip() for line in f if line.strip()]
-            else:
-                models = []
-            tokenizer_to_models[tokenizer_name] = models
-
-    return tokenizer_to_models
-
-
-def save_tokenizer_vocabs_from_models(
-    models: list[str], model_cache_dir: Path | None = None,
-) -> None:
-    """Batch save and clean vocabs for a list of models."""
-    if model_cache_dir is None:
-        model_cache_dir = (
-            Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))) / "hub"
-        )
-
-    for model in models:
-        save_tokenizer_vocab_from_model(model_name=model, model_path=model_cache_dir / model)
-
-    clean_tokenizers_vocab()

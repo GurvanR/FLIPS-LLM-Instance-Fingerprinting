@@ -29,8 +29,7 @@ class RunTest:
         vObs = 0
         length_of_binary_data = len(binary_data)
 
-        # Predefined tau = 2 / sqrt(n)
-        # TODO: verify the tau formula against NIST SP 800-22 Rev 1a section 2.3.8.
+        # Predefined tau = 2 / sqrt(n) (NIST SP 800-22 Rev. 1a, Runs test, pre-test on the proportion of ones)
         tau = 2 / sqrt(length_of_binary_data)
 
         # Step 1 - Compute the pre-test proportion πof ones in the input sequence: π = Σjεj / n
@@ -41,8 +40,7 @@ class RunTest:
         # Step 2 - If it can be shown that absolute value of (π - 0.5) is greater than or equal to tau
         # then the run test need not be performed.
         if abs(pi - 0.5) >= tau:
-            ##logger.debug("The test should not have been run because of a failure to pass test 1, the Frequency (Monobit) test.")
-            return (0.0000, False, None) # Paper author: added None to have standardized output
+            return (0.0000, False, None)  # same (p-value, pass flag, statistic) format as the other tests; no statistic
         else:
             # Step 3 - Compute vObs
             for item in range(1, length_of_binary_data):

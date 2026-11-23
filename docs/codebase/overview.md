@@ -1,97 +1,68 @@
 # Codebase overview
 
-## Architecture summary
+Entry point to the codebase documentation. The repository holds the code and data of the FLIPS paper:
+generation of random bit sequences by LLM instances, the 57 statistics of a sequence, the hierarchical instance
+classifier and Unseen detector, and the analysis tier that regenerates the paper's computed figures, tables and quoted numbers (except Figure 3 and the LLMmap bars of Figure 1).
 
-FLIPS runs in two phases. The **inference phase** (`scripts/Run_Inferences.py`) drives vLLM to
-generate bit sequences from a prompt CSV dataset and writes one Parquet checkpoint per model per
-sampling key. A parse/merge step (`scripts/parsing_generations.py`) assembles those checkpoints
-into per-model `Answers.parquet` files. The **analysis phase** starts from those Parquet files:
-`_compute_save_load_experiments()` computes NIST-based intra-sample and inter-sample features and
-caches them as `.npy`/`.npz` files; the classification layer
-(`batch_classification_across_token_pairs` / `classify` / `classify_cross_token_pairs`) trains
-XGBoost classifiers across token pairs; and figure scripts under `scripts/fig_scripts/` render the
-paper figures. The experiment pipeline (`XP_configs/run_experiments.py`) orchestrates the analysis
-phase end-to-end from declarative YAML configs.
+## Architecture
+
+```
+datasets/ + config/        request tables, prompts, model registry, scenarios
+        |
+ scripts/Run_Inferences.py     generation (vLLM) and parsing           -> answers parquet files    (tier 4)
+        |
+ audit_llm.features            57 statistics per answer                -> feature grid            (tier 2)
+        |
+ audit_llm.pipeline            closed set / open set protocols         -> cells/*.json, summary.json (tiers 2, 3)
+
+ results archive  --->  paper/make_paper.py + paper/check.py           -> figures, tables, numbers (tier 1)
+```
+
+Tiers: [`../reproduction.md`](../reproduction.md). The package `audit_llm` lives in `src/audit_llm/`; the
+distribution is named `flips`.
 
 ## Repository map
 
-| Directory | Role |
-|-----------|------|
-| `src/audit_llm/` | Installable Python package (inference backends, analysis pipeline, classification, scenarios) |
-| `scripts/` | CLI entry points: inference, parsing, figure generation, data fetching, gates |
-| `XP_configs/` | Experiment YAML configs + per-experiment entry point (`XP_script_global.py`) |
-| `datasets/` | Prompt-request CSVs (`Bits_Datasets/*.csv`), prompt config index, system-prompt JSONs |
-| `config/` | Model universe registry (`models.yaml`), scenario YAMLs (`scenarios/`) |
-| `docs/` | User-facing documentation portal |
-| `data/` | Downloaded Zenodo archives land here (fetched by `scripts/fetch_data.py`) |
-| `Productions/` | All run outputs: raw Parquet checkpoints, parsed answers, feature caches, figures |
-
-## Sub-guides
-
-- **Inference pipeline**: [`inference.md`](inference.md)
-- **Experiment pipeline**: [`experiment.md`](experiment.md)
-- **Feature computation**: [`features.md`](features.md)
-- **Classification**: [`classification.md`](classification.md)
-- **Dataset format**: [`dataset.md`](dataset.md)
-- **Quantized models**: [`quantized-models.md`](quantized-models.md)
-- **Configuration**: [`configuration.md`](configuration.md) (simple) · [`configuration-advanced.md`](configuration-advanced.md) (full reference)
-- **Conventions**: [`conventions.md`](conventions.md)
-- **Testing strategy**: [`testing.md`](testing.md)
-- **Shipped scenarios**: [`scenarios.md`](scenarios.md)
-- **Reproduction (no-GPU, 3 tiers)**: [`../reproduction/mode-a.md`](../reproduction/mode-a.md)
-- **Reproduction (GPU, from scratch)**: [`../reproduction/mode-b.md`](../reproduction/mode-b.md)
-- **Analysis paths (legacy + scenario)**: [`../reproduction/legacy-paths.md`](../reproduction/legacy-paths.md)
-
----
-
----
+| Path | Content |
+|---|---|
+| `src/audit_llm/` | the package (layout below) |
+| `paper/` | analysis tier: one module per figure, `make_paper.py` driver, `check.py`, `expected/` reference outputs ([`paper/README.md`](../../paper/README.md)) |
+| `XP_configs/` | experiment configs (`closed_set.yaml`, `open_set.yaml`, `smoke.yaml`, `smoke_open_set.yaml`, `example_custom/`) |
+| `scripts/` | `fetch_data.py`, `Run_Inferences.py`, `parsing_generations.py`, `merge_runs.py`, SLURM template, `screen_run.sh` (standalone helper), `gates/`, `gen_manifest.py` |
+| `datasets/` | request tables and prompt assembly |
+| `config/` | `models.yaml` (model registry), `scenarios/` |
+| `data/` | download target, manifests, data licence |
+| `Productions/` | `Intersection_vocab/` (token vocabulary shared by the models); generation runs are written here |
+| `tests/` | unit, regression, generation and paper tests; `fixtures/` |
 
 ## Package layout (`src/audit_llm/`)
 
-The package has three layers:
-
-```
-config/scenarios/*.yaml          ← declarative scenario files (model × variation selection)
-config/models.yaml               ← model universe registry (HF ids, quant levels, abliterated repos)
-        │
-        ▼  (analysis layer only)
-audit_llm.scenarios              ← scenario package
-  ├── schema.py / loader.py      ← Scenario dataclass + YAML loader (validates against registry)
-  ├── variation.py               ← Variation + Instance (resolved model × variation cell)
-  ├── resolver.py                ← resolve_quantization → vLLM kwarg; resolve_abliteration → HF repo
-  └── enumerator.py              ← build_instances(scenario) → list[Instance]  [analysis SSOT]
-        │
-        ▼
-audit_llm.experiment_runner      ← analysis entry point
-  └── _xp_config_init()          ← prefers scenario: key; falls back to legacy keys
-        │
-        ▼
-audit_llm.xp_tools.data_preparation
-  └── prepare_dataset_features() ← materialises classification classes from Instance list
-```
-
-The inference path (`scripts/Run_Inferences.py`) keeps its **own vLLM expansion** and is **not** connected to the scenario enumerator. This is a deliberate asymmetry: `build_instances` is the analysis-layer source of truth for which instances exist and their labels; the inference path has its own logic for launching vLLM jobs. Do not describe them as a shared or unified source of truth.
-
----
-
-## Scenario layer
-
-A `Scenario` (loaded from `config/scenarios/*.yaml`) selects which model × variation instances the analysis layer materialises as classification classes. It varies over **four axes**:
-
-| Axis | Nature |
+| Module | Role |
 |---|---|
-| `temperature` | sampling-request field |
-| `system_prompt_idx` | sampling-request field |
-| `quantization` | model transform → `{base}@@{quant_key}` via a vLLM engine kwarg |
-| `abliteration` | model transform → `{abliterated_repo}_ablit` using a *different weights repo* on HF Hub |
+| `pipeline.py` | experiment driver: `build-grid` and `run` ([`experiment.md`](experiment.md)) |
+| `features/` | `nist.py` (NIST test statistics and sequence length), `statistics.py` (complementary statistics and 3 NIST statistics), `grid.py` (answers to feature tensor) ([`features.md`](features.md)) |
+| `Classification/` | `protocol.py` (splits, draws, verification samples), `imputation.py`, `xgb.py`, `log_sum_aggregation.py`, `hierarchical.py` (instance classifier), `unseen_detector.py` ([`classification.md`](classification.md)) |
+| `experiment_config_schema.py` | pydantic schema of the experiment YAML files ([`configuration.md`](configuration.md), [`configuration-advanced.md`](configuration-advanced.md)) |
+| `Analysis_Classes.py` | parse the generations of a run under `Productions/` into per-model answers files |
+| `LLM_Classes/` | generation: model loading, chat-template rendering (`chat_rendering.py`, `chat_templates/`), vLLM backend, run configuration, parsing ([`inference.md`](inference.md)) |
+| `Bits_Generation/` | prompt assembly (`Bits_Dataset_Making/`), token-pair sets, answer parsing, the vendored NIST test suite (`NIST_Tests_lib/`) ([`dataset.md`](dataset.md)) |
+| `Tokens_analysis/` | tokenizer vocabularies, token intersections across models, token sampling |
+| `scenarios/` | declarative selection of instances: loader, enumerator, resolver ([`scenarios.md`](scenarios.md)) |
+| `models_management/`, `xp_tools/` | model-name conventions, quantization filtering, label formatting ([`quantized-models.md`](quantized-models.md)) |
+| `path_utils.py`, `file_io.py`, `system_utils.py`, `model_analysis.py` | paths, storage formats, helpers, per-model answer extraction |
 
-`build_instances(scenario)` (in `audit_llm.scenarios.enumerator`) enumerates the full union of variation cells:
-- base models × base variation grid
-- quantized base models × quant variation grid × quant levels (`fp8`, `bitsandbytes_int4`)
-- abliterated models × abliteration group (pinned to `temp=1.0, sp=-1`)
+## Guides
 
-The resulting `Instance` list is the analysis-layer source of truth for the classification class set. Labels are byte-stable strings parsed by `xp_tools.model_filtering`; see the label stability note in [`conventions.md`](conventions.md).
-
-For the three shipped scenarios (`main`, `cross500`, `cross1000`) and the abliteration rules, see [`scenarios.md`](scenarios.md).
-
-For the xp_config `scenario:` field and legacy fallback keys, see [`configuration-advanced.md`](configuration-advanced.md).
+| Guide | Topic |
+|---|---|
+| [`classification.md`](classification.md) | hierarchical classifier, log-sum aggregation, Unseen detector, protocol |
+| [`features.md`](features.md) | the 57 statistics and the feature grid |
+| [`experiment.md`](experiment.md) | pipeline CLI, cells, output files |
+| [`configuration.md`](configuration.md), [`configuration-advanced.md`](configuration-advanced.md) | experiment config files |
+| [`dataset.md`](dataset.md) | request tables and prompt assembly |
+| [`inference.md`](inference.md) | generation and parsing |
+| [`quantized-models.md`](quantized-models.md) | quantized instances |
+| [`scenarios.md`](scenarios.md) | instance selection |
+| [`testing.md`](testing.md) | tests, gates, CI |
+| [`conventions.md`](conventions.md) | naming, paths, licences |
+| [`../provenance.md`](../provenance.md) | the benchmark: LLMs, licences, data hosting |

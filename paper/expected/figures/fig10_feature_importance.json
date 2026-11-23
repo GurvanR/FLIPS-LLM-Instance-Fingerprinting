@@ -1,0 +1,39 @@
+{
+ "top5": [
+  [
+   "Seq. length (bits)",
+   0.0439
+  ],
+  [
+   "First run: symbol (= first bit)",
+   0.0385
+  ],
+  [
+   "Approximate entropy \u03c7\u00b2 (m=10)",
+   0.0357
+  ],
+  [
+   "First 8 bits as an integer (0-255)",
+   0.0253
+  ],
+  [
+   "Overlapping template 10: \u03c7\u00b2 (75-bit blk)",
+   0.0229
+  ]
+ ],
+ "group_share": {
+  "NIST statistic": 0.5384,
+  "length": 0.0439,
+  "past dependence": 0.2803,
+  "opening bits": 0.1374
+ },
+ "n_features": {
+  "NIST statistic": 31,
+  "length": 1,
+  "past dependence": 19,
+  "opening bits": 6
+ },
+ "n_cells": 155,
+ "note": "importance/*.json: 31 pairs x 5 splits = 155 fits; XGBoost gain normalised per model, mean over the 155 fits, IQR bars; features missing from a model's gain dict = 0",
+ "script": "paper/figures/feature_importance.py"
+}

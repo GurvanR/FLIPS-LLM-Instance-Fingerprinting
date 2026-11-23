@@ -109,76 +109,6 @@ class RandomExcursions:
 
 
     @staticmethod
-    def variant_test(binary_data:str, verbose=False):
-        """
-        from the NIST documentation http://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-22r1a.pdf
-
-        :param binary_data:
-        :param verbose:
-        :return:
-        """
-        length_of_binary_data = len(binary_data)
-        int_data = zeros(length_of_binary_data)
-
-        for count in range(length_of_binary_data):
-            int_data[count] = int(binary_data[count])
-
-        sum_int = (2 * int_data) - ones(len(int_data))
-        cumulative_sum = cumsum(sum_int)
-
-        li_data = []
-        index = []
-        for count in sorted(set(cumulative_sum)):
-            if abs(count) <= 9:
-                index.append(count)
-                li_data.append([count, len(where(cumulative_sum == count)[0])])
-
-        j = RandomExcursions.get_frequency(li_data, 0) + 1
-
-        p_values = []
-        for count in (sorted(set(index))):
-            if not count == 0:
-                den = sqrt(2 * j * (4 * abs(count) - 2))
-                p_values.append(erfc(abs(RandomExcursions.get_frequency(li_data, count) - j) / den))
-
-        count = 0
-        # Remove 0 from li_data so the number of element will be equal to p_values
-        for data in li_data:
-            if data[0] == 0:
-                li_data.remove(data)
-                index.remove(0)
-                break
-            count += 1
-
-        if verbose:
-            logger.debug('Random Excursion Variant Test DEBUG BEGIN:')
-            logger.debug("\tLength of input:\t", length_of_binary_data)
-            logger.debug('\tValue of j:\t\t', j)
-            logger.debug('\tP-Values:')
-            logger.debug('\t\t STATE \t\t COUNTS \t\t P-Value \t\t Conclusion')
-            count = 0
-            for item in p_values:
-                logger.debug('\t\t', repr(li_data[count][0]).rjust(4), '\t\t', li_data[count][1], '\t\t', repr(item).ljust(14), '\t\t', (item >= 0.01))
-                count += 1
-            logger.debug('DEBUG END.')
-
-
-        states = []
-        for item in index:
-            if item < 0:
-                states.append(str(item))
-            else:
-                states.append('+' + str(item))
-
-        result = []
-        count = 0
-        for item in p_values:
-            result.append((states[count], li_data[count][0], li_data[count][1], item, (item >= 0.01)))
-            count += 1
-
-        return None, result, None
-
-    @staticmethod
     def get_pi_value(k, x):
         """
         This method is used by the random_excursions method to get expected probabilities
@@ -190,20 +120,3 @@ class RandomExcursions:
         else:
             out = (1.0 / (4 * x * x)) * (1 - 1.0 / (2 * abs(x))) ** (k - 1)
         return out
-
-    @staticmethod
-    def get_frequency(list_data, trigger):
-        """
-        This method is used by the random_excursions_variant method to get frequencies
-        """
-        frequency = 0
-        for (x, y) in list_data:
-            if x == trigger:
-                frequency = y
-        return frequency
-    
-
-if __name__=="__main__":
-    data = "01011010100101101101100110100001101100001111001001111011101100101100010101011100010010010001101101101011010100101101101100110100001101100001111001001111101110110010110001010101110001001001000110110110101101010010110110110011010000110110000111100100111110111011001011000101010111000100100100011011011"
-
-    logger.debug(RandomExcursions.random_excursions_test(data))

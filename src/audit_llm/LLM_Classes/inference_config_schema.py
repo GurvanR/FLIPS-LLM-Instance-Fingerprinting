@@ -1,7 +1,7 @@
 """Pydantic schema for ``scripts/Inference_configs.yaml`` validation.
 
 Provides :func:`validate_all_configs` to validate all dataset entries from the
-YAML in a single call.  Key normalisation maps legacy UPPER_CASE YAML keys
+YAML in a single call.  Key normalisation maps the UPPER_CASE YAML keys
 (``TOP_K``, ``MAX_TOKENS``, …) to their snake_case Pydantic field names.
 """
 
@@ -22,14 +22,13 @@ class InferenceConfig(BaseModel):
     top_k: int
     max_model_len: int
     max_tokens: int
-    nb_of_samples: Optional[int] = None
     token_pairs_set: Optional[str] = None
     temperatures: Optional[list[float]] = None
     logprobs: Optional[int] = None
 
 
 # ------------------------------------------------------------------
-# Key normalisation (YAML legacy → Pydantic)
+# Key normalisation (UPPER_CASE YAML keys → Pydantic fields)
 # ------------------------------------------------------------------
 
 _KEY_ALIASES: dict[str, str] = {

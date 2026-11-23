@@ -16,3 +16,23 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     """
     if exitstatus == 5:
         session.exitstatus = 0
+
+
+FIXTURES = __import__("pathlib").Path(__file__).resolve().parent / "fixtures"
+
+
+@pytest.fixture(scope="session")
+def fixture_grid():
+    """Feature grid of the in-repo fixture (tests/fixtures/answers.parquet), computed once per session."""
+    import polars as pl
+
+    from audit_llm.features import build_grid
+
+    return build_grid(pl.read_parquet(FIXTURES / "answers.parquet"), n_jobs=4)
+
+
+@pytest.fixture(scope="session")
+def closed_reference():
+    import numpy as np
+
+    return np.load(FIXTURES / "reference" / "closed_set.npz")

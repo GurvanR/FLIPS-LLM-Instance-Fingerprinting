@@ -1,3 +1,6 @@
+# Prompt configurations, keyed by the prompt_idx column of the request CSVs. The assembly
+# (Prompts.prompt_idx_to_actual_prompt) reads instruction_prompt, learning_shot, seed and nb_of_bits;
+# end_context and pre_prompt are recorded with the entry.
 1:
     instruction_prompt: ip2
     end_context: None
@@ -5,20 +8,3 @@
     learning_shot: 1
     seed: 42
     nb_of_bits: 1000
-
-2:
-    llmmap: 0
-3:
-    llmmap: 1
-4:
-    llmmap: 2
-5:
-    llmmap: 3
-6:
-    llmmap: 4
-7:
-    llmmap: 5
-8: 
-    llmmap: 6
-9:
-    llmmap: 7

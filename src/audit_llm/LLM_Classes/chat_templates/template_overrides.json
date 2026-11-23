@@ -1,0 +1,6 @@
+{
+ "meta-llama/Llama-3.1-8B-Instruct": "meta-llama__Llama-3.1-8B-Instruct@0e9e39f249.jinja",
+ "meta-llama/Meta-Llama-3.1-70B-Instruct": "meta-llama__Meta-Llama-3.1-70B-Instruct@1605565b47.jinja",
+ "microsoft/Phi-3-mini-4k-instruct": "microsoft__Phi-3-mini-4k-instruct@f39ac1d28e.jinja",
+ "microsoft/Phi-3-mini-128k-instruct": "microsoft__Phi-3-mini-128k-instruct@f3c06aed62.jinja"
+}

@@ -2,19 +2,24 @@ cff-version: 1.2.0
 title: "FLIPS: Instance-Fingerprinting for LLMs via Pseudo-random Sequences"
 message: "If you use this software, please cite it using the metadata below."
 type: software
+version: "2.0.0"
 authors:
   - given-names: Gurvan
     family-names: Richardeau
+    affiliation: "PEReN (Paris, France)"
   - given-names: Gohar
     family-names: Dashyan
+    affiliation: "PEReN (Paris, France)"
   - given-names: Erwan
     family-names: Le Merrer
+    affiliation: "Université de Rennes, Inria, CNRS/IRISA (Rennes, France)"
   - given-names: Gilles
     family-names: Tredan
+    affiliation: "LAAS, CNRS (Toulouse, France)"
 repository-code: "https://github.com/GurvanR/FLIPS-LLM-Instance-Fingerprinting"
 license: MIT
-date-released: "2026-06-01"
-# doi: added once the Zenodo DOI is minted — a "10.XXXX/..." placeholder FAILS `cffconvert --validate`.
+date-released: "2026-11-21"
+doi: "10.5281/zenodo.24461715"
 preferred-citation:
   type: article
   title: "FLIPS: Instance-Fingerprinting for LLMs via Pseudo-random Sequences"

@@ -1,0 +1,232 @@
+{
+ "fig13": {
+  "by_nt": {
+   "32": {
+    "recall_at_p99": 0.4241,
+    "recall_at_p90": 0.6297
+   }
+  },
+  "fit_source_cells": {
+   "lopo": 125,
+   "val": 30
+  },
+  "note": "temperature-scaled confidences on the argmax decision; temperature fitted on the inner validation split (leave-one-pair-out where it holds fewer than N_t rows per class); mean over pairs, band std"
+ },
+ "fig15": {
+  "n_pairs": 31,
+  "mean": 0.7664,
+  "std": 0.0279,
+  "min": 0.7073,
+  "max": 0.8171,
+  "top5": [
+   [
+    "rel-IM",
+    0.8171
+   ],
+   [
+    "ular-icons",
+    0.7998
+   ],
+   [
+    "ORY-child",
+    0.7973
+   ],
+   [
+    "City-load",
+    0.7951
+   ],
+   [
+    "HE-mind",
+    0.7941
+   ]
+  ],
+  "bottom5": [
+   [
+    "ump-reek",
+    0.7332
+   ],
+   [
+    "scar-este",
+    0.7266
+   ],
+   [
+    "ensor-buf",
+    0.7187
+   ],
+   [
+    "orb-touch",
+    0.7126
+   ],
+   [
+    "awk-ise",
+    0.7073
+   ]
+  ],
+  "note": "N_r 300, N_t 32, mean over the splits of a pair"
+ },
+ "table3": {
+  "top5": [
+   [
+    "rel-IM",
+    0.8171
+   ],
+   [
+    "ular-icons",
+    0.7998
+   ],
+   [
+    "ORY-child",
+    0.7973
+   ],
+   [
+    "City-load",
+    0.7951
+   ],
+   [
+    "HE-mind",
+    0.7941
+   ]
+  ],
+  "bottom5": [
+   [
+    "ump-reek",
+    0.7332
+   ],
+   [
+    "scar-este",
+    0.7266
+   ],
+   [
+    "ensor-buf",
+    0.7187
+   ],
+   [
+    "orb-touch",
+    0.7126
+   ],
+   [
+    "awk-ise",
+    0.7073
+   ]
+  ]
+ },
+ "showcase": {
+  "flips_attributed_to_original_pct": {
+   "Phi-3-medium-4k": 3.4234,
+   "Smaug-Llama-3-70B": 26.129,
+   "Qwen2-7B": 56.4228
+  },
+  "flips_recall_abliterated_pct": {
+   "Phi-3-medium-4k": 96.3964,
+   "Smaug-Llama-3-70B": 73.5484,
+   "Qwen2-7B": 43.5772
+  },
+  "llmmap_pct": {
+   "Phi-3-medium-4k": 75.0,
+   "Smaug-Llama-3-70B": 92.5,
+   "Qwen2-7B": 95.0
+  },
+  "n_batches": {
+   "Phi-3-medium-4k": 555,
+   "Smaug-Llama-3-70B": 620,
+   "Qwen2-7B": 615
+  },
+  "sources": {
+   "Phi-3-medium-4k": {
+    "instance": "failspy/Phi-3-medium-4k-instruct-abliterated-v3_temp-1.0_sp--1",
+    "original_llm": "microsoft/Phi-3-medium-4k-instruct",
+    "n_original_instances": 8,
+    "batches": 555,
+    "attributed_to_original": 19,
+    "correct_abliterated": 535,
+    "top_predicted": [
+     [
+      "failspy/Phi-3-medium-4k-instruct-abliterated-v3_temp-1.0_sp--1",
+      535
+     ],
+     [
+      "microsoft/Phi-3-medium-4k-instruct_temp-1.0_sp--1",
+      11
+     ],
+     [
+      "microsoft/Phi-3-medium-4k-instruct_temp-1.0_sp-7",
+      3
+     ],
+     [
+      "microsoft/Phi-3-medium-4k-instruct_temp-1.0_sp-0",
+      2
+     ],
+     [
+      "microsoft/Phi-3-medium-4k-instruct_temp-1.0_sp-3",
+      2
+     ]
+    ]
+   },
+   "Smaug-Llama-3-70B": {
+    "instance": "failspy/Smaug-Llama-3-70B-Instruct-abliterated-v3_temp-1.0_sp--1",
+    "original_llm": "abacusai/Smaug-Llama-3-70B-Instruct",
+    "n_original_instances": 8,
+    "batches": 620,
+    "attributed_to_original": 162,
+    "correct_abliterated": 456,
+    "top_predicted": [
+     [
+      "failspy/Smaug-Llama-3-70B-Instruct-abliterated-v3_temp-1.0_sp--1",
+      456
+     ],
+     [
+      "abacusai/Smaug-Llama-3-70B-Instruct_temp-1.0_sp--1",
+      54
+     ],
+     [
+      "abacusai/Smaug-Llama-3-70B-Instruct_temp-1.0_sp-0",
+      40
+     ],
+     [
+      "abacusai/Smaug-Llama-3-70B-Instruct_temp-1.0_sp-3",
+      30
+     ],
+     [
+      "abacusai/Smaug-Llama-3-70B-Instruct_temp-1.0_sp-7",
+      22
+     ]
+    ]
+   },
+   "Qwen2-7B": {
+    "instance": "natong19/Qwen2-7B-Instruct-abliterated_temp-1.0_sp--1",
+    "original_llm": "Qwen/Qwen2-7B-Instruct",
+    "n_original_instances": 16,
+    "batches": 615,
+    "attributed_to_original": 347,
+    "correct_abliterated": 268,
+    "top_predicted": [
+     [
+      "natong19/Qwen2-7B-Instruct-abliterated_temp-1.0_sp--1",
+      268
+     ],
+     [
+      "Qwen/Qwen2-7B-Instruct_temp-1.0_sp--1",
+      176
+     ],
+     [
+      "Qwen/Qwen2-7B-Instruct@@fp8_temp-1.0_sp--1",
+      78
+     ],
+     [
+      "Qwen/Qwen2-7B-Instruct_temp-1.0_sp-0",
+      17
+     ],
+     [
+      "Qwen/Qwen2-7B-Instruct@@fp8_temp-1.0_sp-0",
+      15
+     ]
+    ]
+   }
+  },
+  "note": "closed set, N_r 300, N_t 32, 31 pairs x 5 splits pooled (confusion row of the abliterated instance); attributed = predicted any non-abliterated instance of the original LLM (dataio.ABLIT_MAP); LLMmap values = constants measured with the pretrained LLMmap (off the shelf), not recomputed"
+ },
+ "_build": {
+  "nr": 300,
+  "nt": 32
+ }
+}

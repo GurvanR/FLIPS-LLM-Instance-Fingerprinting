@@ -1,0 +1,129 @@
+{
+ "definition": "NIST score of (instance, pair) = mean over the 28 NIST tests of the share of the instance's sequences with p >= 0.05 (results/nist/nist_scores.json)",
+ "n_instances": 237,
+ "n_pairs": 31,
+ "nist_mean_pair01": 0.7449,
+ "nist_mean_others_mean": 0.4566,
+ "nist_mean_per_pair": {
+  "0-1": 0.7449,
+  "ali-yg": 0.5259,
+  "orb-touch": 0.5184,
+  "crit-SA": 0.516,
+  "City-load": 0.5065,
+  "HE-mind": 0.4987,
+  "rel-IM": 0.4923,
+  "distance-Menu": 0.4876,
+  "hed-DI": 0.4844,
+  "Li-LOCK": 0.4796,
+  "ORY-child": 0.4678,
+  "Price-CI": 0.467,
+  "scar-este": 0.4634,
+  "four-iously": 0.4632,
+  "FILE-occup": 0.463,
+  "ensor-buf": 0.4618,
+  "awk-ise": 0.4582,
+  "df-bits": 0.4539,
+  "hou-te": 0.452,
+  "ular-icons": 0.4502,
+  "wise-Flag": 0.4405,
+  "omic-anges": 0.4371,
+  "Pr-eto": 0.435,
+  "g-ants": 0.4236,
+  "Seg-ument": 0.422,
+  "way-ither": 0.4204,
+  "Sec-prise": 0.4128,
+  "isan-Provider": 0.4067,
+  "Options-abol": 0.4028,
+  "ump-reek": 0.4012,
+  "Open-mart": 0.3858
+ },
+ "rank_pair01_by_mean": 1,
+ "best_other_pair": "ali-yg",
+ "best_other_mean": 0.5259,
+ "second_best_other_pair": "orb-touch",
+ "second_best_other_mean": 0.5184,
+ "worst_pair": "Open-mart",
+ "worst_pair_mean": 0.3858,
+ "paired_diff_pair01_minus_best": {
+  "mean": 0.2191,
+  "se_over_instances": 0.0102,
+  "ci95_t": [
+   0.199,
+   0.2391
+  ],
+  "sd": 0.1565,
+  "wilcoxon_p": 4.775053658599405e-35,
+  "note": "SE over the 237 instances, treated as independent (they are not: 30 base LLMs, shared settings); read as descriptive"
+ },
+ "paired_diff_pair01_minus_mean_others": {
+  "mean": 0.2883,
+  "se_over_instances": 0.0089
+ },
+ "share_instances_pair01_beats_best_other": 0.8819,
+ "ties_with_best_other": 0,
+ "share_instances_pair01_beats_instance_median_of_others": 0.9536,
+ "share_instances_pair01_beats_all_30_others": 0.8101,
+ "share_instances_pair01_rank1_or_tied": 0.8101,
+ "median_pair_by_mean": {
+  "pairs": [
+   "ensor-buf",
+   "awk-ise"
+  ],
+  "note": "with 0-1 first, the 30 others occupy ranks 2-31; their median = ranks 16 and 17"
+ },
+ "share_instances_pair01_beats_median_pairs": {
+  "ensor-buf": 0.9241,
+  "awk-ise": 0.962
+ },
+ "share_instances_pair01_beats_each_other": {
+  "ali-yg": 0.8819,
+  "orb-touch": 0.903,
+  "crit-SA": 0.9114,
+  "City-load": 0.9114,
+  "HE-mind": 0.9536,
+  "rel-IM": 0.9198,
+  "distance-Menu": 0.9241,
+  "hed-DI": 0.9283,
+  "Li-LOCK": 0.9156,
+  "ORY-child": 0.9409,
+  "Price-CI": 0.9114,
+  "scar-este": 0.9451,
+  "four-iously": 0.9283,
+  "FILE-occup": 0.9409,
+  "ensor-buf": 0.9241,
+  "awk-ise": 0.962,
+  "df-bits": 0.9578,
+  "hou-te": 0.9578,
+  "ular-icons": 0.9451,
+  "wise-Flag": 0.9156,
+  "omic-anges": 0.9494,
+  "Pr-eto": 0.9367,
+  "g-ants": 0.9789,
+  "Seg-ument": 0.9241,
+  "way-ither": 0.962,
+  "Sec-prise": 0.9367,
+  "isan-Provider": 0.9662,
+  "Options-abol": 0.9283,
+  "ump-reek": 0.9578,
+  "Open-mart": 0.9747
+ },
+ "min_share_vs_any_other": 0.8819,
+ "min_share_pair": "ali-yg",
+ "rank_of_pair01_per_instance": {
+  "mean": 2.9072,
+  "median": 1.0,
+  "share_rank1": 0.8101,
+  "share_top3": 0.8439
+ },
+ "recall": {
+  "nt": 32,
+  "model": "hierarchical closed set, per-instance recall pooled over the 5 splits of a pair (lib/nist_split.arrays)",
+  "recall_mean_pair01": 0.7551,
+  "recall_mean_others": 0.7612
+ },
+ "source": {
+  "nist": "results/nist/nist_scores.json",
+  "cells": "results/closed_set/hierarchical/cells",
+  "script": "paper/figures/zero_one_vs_pairs.py"
+ }
+}

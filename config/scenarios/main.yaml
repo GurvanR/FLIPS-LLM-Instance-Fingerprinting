@@ -9,25 +9,14 @@
 #                    (temp[0.4,0.6,0.8,1.0]×sp[-1]  ∪  temp[1.0]×sp[0,3,6,7])
 #    32 quantized  =  4 quant base models × 2 quant levels × 4 variations
 #                    (temp[0.6,1.0]×sp[-1]  ∪  temp[1.0]×sp[0,3])  crossed over {fp8, bitsandbytes_int4}
-#     5 abliterated = 5 data-backed abliterated repos, pinned temp=1.0 / sp=-1
+#     5 abliterated = 5 abliterated repos, pinned temp=1.0 / sp=-1
 #   ------------------------------------------------------------------------
 #   237 total
 #
-# The variation grids are ported verbatim from the historical run config
-# XP_configs/e1_closedset_headline/FLIPS_mix_tp_full.yaml
-# (`model_variations` + `quantized_model_variations`). The model lists are the
+# The variation grids are those of the generation run of the paper's corpus. The model lists are the
 # canonical model universe declared in config/models.yaml.
 #
-# Abliteration list — 5 not 6.
-#   The source config's `abliterated_models` lists SIX repos. The sixth,
-#       failspy/Phi-3-mini-128k-instruct-abliterated-v3
-#   is config-listed but ABSENT from the released model universe (no data was
-#   ever generated for it). main.yaml therefore lists only the 5 data-backed
-#   repos, so the offline build self-consistently lands on 237 with NO
-#   data-universe filter needed. (The 200 base + 5 abliterated labels here tie
-#   EXACTLY to the released 205-class identity in
-#   XP_configs/e3_flips_vs_llmmap/llmmap_if_data/checkpoint_dir/new_var_models_idx.json
-#   — asserted by tests/test_main_scenario_237.py.)
+# tests/test_main_scenario_237.py asserts the 237 = 200 + 32 + 5 split.
 
 name: main
 
@@ -74,7 +63,7 @@ quantized_variations:
   - {temperature: [0.6, 1.0], system_prompt_idx: [-1], quantization: [fp8, bitsandbytes_int4]}
   - {temperature: [1.0], system_prompt_idx: [0, 3], quantization: [fp8, bitsandbytes_int4]}
 
-# 5 data-backed abliterated repos, pinned to the paper default (temp=1.0, sp=-1).
+# 5 abliterated repos, pinned to the paper default (temp=1.0, sp=-1).
 abliterated_models:
   - failspy/Meta-Llama-3-8B-Instruct-abliterated-v3
   - failspy/Smaug-Llama-3-70B-Instruct-abliterated-v3
